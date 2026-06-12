@@ -1,0 +1,66 @@
+import { Link } from "react-router-dom";
+import EngagementBar from "./EngagementBar";
+import { resolveMediaUrl } from "../api/newsApi";
+import { getCategoryPath } from "../config/pageConfig";
+import { formatPublishedDate } from "../utils/formatters";
+
+function NewsCard({ article }) {
+  const imageUrl = resolveMediaUrl(article.image);
+
+  return (
+    <article className={`news-card ${imageUrl ? "news-card--has-image" : "news-card--no-image"} card border-0 shadow-sm h-100 overflow-hidden`}>
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          className="news-card-media"
+          alt={article.image_alt || article.title}
+        />
+      ) : null}
+
+      <div className="card-body d-flex flex-column">
+        <div className="news-card__meta d-flex justify-content-between align-items-center gap-2 mb-3">
+          <Link
+            to={getCategoryPath(article.category.slug)}
+            className="badge text-bg-light border text-decoration-none text-secondary"
+          >
+            {article.category.name}
+          </Link>
+          <span className="small text-secondary">
+            {formatPublishedDate(article.published_at)}
+          </span>
+        </div>
+
+        <Link
+          to={`/articles/${article.id}`}
+          className="text-dark text-decoration-none stretched-link"
+        >
+          <h3 className="news-card__title h5 fw-semibold">{article.title}</h3>
+        </Link>
+
+        <p className="news-card__excerpt text-secondary small mb-3">{article.excerpt}</p>
+
+        <div className="news-card__footer mt-auto">
+          <p className="small mb-2">
+            <span className="fw-semibold">{article.author}</span>
+            <span className="text-secondary"> for {article.source}</span>
+          </p>
+
+          <div className="position-relative z-1">
+            <EngagementBar
+              articleId={article.id}
+              articleTitle={article.title}
+              articlePath={`/articles/${article.id}`}
+              likesCount={article.likes_count}
+              commentsCount={article.comments_count}
+              sharesCount={article.shares_count}
+              commentHref={`/articles/${article.id}#comments`}
+              compact
+            />
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export default NewsCard;
