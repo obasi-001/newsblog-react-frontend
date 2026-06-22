@@ -44,6 +44,7 @@ async function requestFirstAvailable(candidates, payload = {}) {
         url: typeof candidate.url === "function" ? candidate.url(payload) : candidate.url,
         params: candidate.buildParams?.(payload),
         data: candidate.buildData?.(payload),
+        skipAuth: Boolean(candidate.skipAuth),
       });
 
       return response.data;
@@ -65,24 +66,30 @@ async function requestFirstAvailable(candidates, payload = {}) {
 export const fetchCategories = async (options = {}) => {
   const response = await API.get(NEWS_ENDPOINTS.categories, {
     params: buildListParams(options),
+    skipAuth: true,
   });
   return response.data;
 };
 
 export const fetchSportsSubcategories = async () => {
-  const response = await API.get(NEWS_ENDPOINTS.sportsSubcategories);
+  const response = await API.get(NEWS_ENDPOINTS.sportsSubcategories, {
+    skipAuth: true,
+  });
   return response.data;
 };
 
 export const fetchArticles = async (options = {}) => {
   const response = await API.get(NEWS_ENDPOINTS.articles, {
     params: buildListParams(options),
+    skipAuth: true,
   });
   return response.data;
 };
 
 export const fetchArticleById = async (articleId) => {
-  const response = await API.get(`${NEWS_ENDPOINTS.articles}${articleId}/`);
+  const response = await API.get(`${NEWS_ENDPOINTS.articles}${articleId}/`, {
+    skipAuth: true,
+  });
   return response.data;
 };
 
@@ -92,21 +99,25 @@ export const fetchArticleComments = async (articleId) =>
       {
         url: ({ articleId: currentArticleId }) =>
           `${NEWS_ENDPOINTS.articles}${currentArticleId}/comments/`,
+        skipAuth: true,
         retryStatuses: [400, 404, 405, 422],
       },
       {
         url: NEWS_ENDPOINTS.comments,
         buildParams: ({ articleId: currentArticleId }) => ({ article: currentArticleId }),
+        skipAuth: true,
         retryStatuses: [400, 404, 405, 422],
       },
       {
         url: NEWS_ENDPOINTS.comments,
         buildParams: ({ articleId: currentArticleId }) => ({ article_id: currentArticleId }),
+        skipAuth: true,
         retryStatuses: [400, 404, 405, 422],
       },
       {
         url: "comments/",
         buildParams: ({ articleId: currentArticleId }) => ({ article: currentArticleId }),
+        skipAuth: true,
         retryStatuses: [400, 404, 405, 422],
       },
     ],
@@ -277,16 +288,21 @@ export const shareArticle = async (articleId, sharePayload = {}) =>
 export const fetchVideos = async (options = {}) => {
   const response = await API.get(NEWS_ENDPOINTS.videos, {
     params: buildListParams(options),
+    skipAuth: true,
   });
   return response.data;
 };
 
 export const fetchVideoBySlug = async (videoSlug) => {
-  const response = await API.get(`${NEWS_ENDPOINTS.videos}${videoSlug}/`);
+  const response = await API.get(`${NEWS_ENDPOINTS.videos}${videoSlug}/`, {
+    skipAuth: true,
+  });
   return response.data;
 };
 
 export const fetchAllNews = async () => {
-  const response = await API.get(NEWS_ENDPOINTS.allNews);
+  const response = await API.get(NEWS_ENDPOINTS.allNews, {
+    skipAuth: true,
+  });
   return response.data;
 };

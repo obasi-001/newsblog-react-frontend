@@ -1,4 +1,10 @@
 import API from "./axios";
+export {
+  clearAuthTokens,
+  getStoredAccessToken,
+  hasStoredAuthToken,
+  storeAuthTokens,
+} from "./authStorage";
 import { getApiErrorMessage } from "./utils/apiErrors";
 
 const passwordResetRequestCandidates = [
@@ -88,12 +94,6 @@ const emailVerificationResendCandidates = [
     buildData: (email) => ({ email }),
   },
 ];
-
-function notifyAuthChange() {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("authchange"));
-  }
-}
 
 function matchesActiveSubscriptionState(value) {
   if (typeof value === "boolean") {
@@ -258,26 +258,3 @@ export const ensureUserSubscription = async () => {
     throw error;
   }
 };
-
-export const storeAuthTokens = (tokens) => {
-  if (tokens?.access) {
-    localStorage.setItem("accessToken", tokens.access);
-    localStorage.setItem("token", tokens.access);
-  }
-
-  if (tokens?.refresh) {
-    localStorage.setItem("refreshToken", tokens.refresh);
-  }
-
-  notifyAuthChange();
-};
-
-export const clearAuthTokens = () => {
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("refreshToken");
-  localStorage.removeItem("token");
-  notifyAuthChange();
-};
-
-export const hasStoredAuthToken = () =>
-  Boolean(localStorage.getItem("accessToken") || localStorage.getItem("token"));

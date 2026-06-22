@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
 import { FiCheck, FiCopy, FiHeart, FiLink, FiMail, FiMessageCircle, FiShare2 } from "react-icons/fi";
+import { hasStoredAuthToken } from "../auth";
 import { registerArticleShare, sendArticleLike } from "../api/newsApi";
 import { getApiErrorMessage } from "../utils/apiErrors";
 import { formatCompactCount } from "../utils/formatters";
@@ -184,6 +185,11 @@ function EngagementBar({
 
   async function handleLike() {
     if (!articleId || isSubmittingLike) {
+      return;
+    }
+
+    if (!hasStoredAuthToken()) {
+      setLikeError("Please log in or subscribe before liking articles.");
       return;
     }
 

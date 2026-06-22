@@ -139,6 +139,12 @@ function ArticleDetail() {
       return;
     }
 
+    if (!hasStoredAuthToken()) {
+      setSubmitError("Please log in or subscribe before posting a comment.");
+      setSubmitSuccess("");
+      return;
+    }
+
     setIsSubmittingComment(true);
     setSubmitError("");
     setSubmitSuccess("");
