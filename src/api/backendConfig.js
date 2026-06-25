@@ -1,4 +1,4 @@
-const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
+const DEFAULT_BACKEND_URL = "http://172.20.10.2:8000";
 
 function trimTrailingSlashes(value) {
   return String(value ?? "").trim().replace(/\/+$/, "");
