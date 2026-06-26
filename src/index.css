@@ -1235,6 +1235,25 @@ body[data-theme="dark"] .alert-danger {
     font-weight: 400 !important;
     line-height: 1.16;
   }
+
+  .engagement-share__menu,
+  .engagement-bar--compact .engagement-share__menu {
+    bottom: 1rem;
+    left: 1rem;
+    max-height: min(26rem, calc(100vh - 2rem));
+    min-width: 0;
+    overflow-y: auto;
+    position: fixed;
+    right: 1rem;
+    top: auto;
+    width: auto;
+    z-index: 3000;
+  }
+
+  .engagement-share__option {
+    min-height: 2.75rem;
+    width: 100%;
+  }
 }
 
 @media (min-width: 576px) {
