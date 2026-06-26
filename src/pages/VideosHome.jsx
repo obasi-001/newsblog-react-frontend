@@ -51,7 +51,7 @@ function VideosHome() {
       setError("");
 
       try {
-        const data = await getGroupedVideos({ allPages: true, limit: 100 });
+        const data = await getGroupedVideos({ pageSize: 5 });
 
         if (!cancelled) {
           setGroups(data);

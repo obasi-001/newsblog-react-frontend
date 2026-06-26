@@ -1,27 +1,78 @@
-import { FaCopyright } from "react-icons/fa";
+import {
+  FaCopyright,
+  FaFacebookF,
+  FaInstagram,
+  FaLinkedinIn,
+  FaWhatsapp,
+} from "react-icons/fa";
 import { FiMail } from "react-icons/fi";
 
+const contactLinks = [
+  {
+    label: "Email Okwi Int'l Tech",
+    href: "mailto:okwivexxx@gmail.com",
+    Icon: FiMail,
+  },
+  {
+    label: "Contact Okwi Int'l Tech on LinkedIn",
+    href: "https://www.linkedin.com/in/okwivexxx",
+    Icon: FaLinkedinIn,
+  },
+  {
+    label: "Contact Okwi Int'l Tech on WhatsApp",
+    href: "https://wa.me/2349034014734",
+    Icon: FaWhatsapp,
+  },
+  {
+    label: "Follow Okwi Int'l Tech on Facebook",
+    href: "https://www.facebook.com/okwivexxx",
+    Icon: FaFacebookF,
+  },
+  {
+    label: "Follow Okwi Int'l Tech on Instagram",
+    href: "https://www.instagram.com/okwivexxx",
+    Icon: FaInstagram,
+  },
+];
+
 function Footer() {
+  const currentYear = new Date().getFullYear();
+
   return (
-    <footer className="site-footer bg-black text-white text-center p-4 mt-5">
-      <p className="small text-white-50 mb-0">
-        Daily headlines, developing stories, and trusted updates
-      </p>
-      <p className="mb-1 d-inline-flex align-items-center justify-content-center gap-2">
-        <FaCopyright aria-hidden="true" />
-        <span>Copyright NATG TV All Rights Reserved</span>
-      </p>
-    
-      <p className="small text-white-50 mb-0 mt-2">
-        Developed by Okwi Int&apos;l Tech. Contact us{" "}
-        <a
-          href="mailto:okwivexxx@gmail.com"
-          className="d-inline-flex align-items-center gap-1 text-reset"
-        >
-          <FiMail aria-hidden="true" />
-          <span>okwivexxx@gmail.com</span>
-        </a>
-      </p>
+    <footer className="site-footer mt-5">
+      <div className="site-footer__inner">
+        <div className="site-footer__brand">
+          <span className="site-footer__name">NATG TV</span>
+          <p className="site-footer__tagline">
+            Daily headlines, developing stories, and trusted updates.
+          </p>
+        </div>
+
+        <div className="site-footer__meta">
+          <p className="site-footer__copyright">
+            <FaCopyright aria-hidden="true" />
+            <span>{currentYear} NATG TV. All Rights Reserved.</span>
+          </p>
+
+          <p className="site-footer__credit">Developed by Okwi Int&apos;l Tech</p>
+        </div>
+
+        <div className="site-footer__contacts" aria-label="Contact links">
+          {contactLinks.map(({ label, href, Icon }) => (
+            <a
+              key={label}
+              href={href}
+              className="site-footer__contact"
+              aria-label={label}
+              title={label}
+              target={href.startsWith("http") ? "_blank" : undefined}
+              rel={href.startsWith("http") ? "noreferrer" : undefined}
+            >
+              <Icon aria-hidden="true" />
+            </a>
+          ))}
+        </div>
+      </div>
     </footer>
   );
 }

@@ -5,6 +5,7 @@ export const NEWS_ENDPOINTS = {
   sportsSubcategories: "news/categories/sports/subcategories/",
   articles: "news/articles/",
   videos: "news/videos/",
+  groupedVideos: "news/videos/grouped/",
   allNews: "news/all/",
   comments: "news/comments/",
   shares: "news/shares/",
@@ -25,9 +26,8 @@ function buildListParams(options = {}) {
   if (options.group) params.group = options.group;
   if (options.page) params.page = options.page;
   if (options.pageSize || options.limit) {
-    const size = options.pageSize || options.limit;
+    const size = Math.min(Math.max(Number(options.pageSize || options.limit) || 10, 1), 25);
     params.page_size = size;
-    params.limit = size;
   }
   if (options.search) params.search = options.search;
 
@@ -287,6 +287,14 @@ export const shareArticle = async (articleId, sharePayload = {}) =>
 
 export const fetchVideos = async (options = {}) => {
   const response = await API.get(NEWS_ENDPOINTS.videos, {
+    params: buildListParams(options),
+    skipAuth: true,
+  });
+  return response.data;
+};
+
+export const fetchGroupedVideos = async (options = {}) => {
+  const response = await API.get(NEWS_ENDPOINTS.groupedVideos, {
     params: buildListParams(options),
     skipAuth: true,
   });

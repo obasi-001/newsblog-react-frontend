@@ -4,6 +4,7 @@ import {
   fetchArticleComments,
   fetchArticles,
   fetchCategories,
+  fetchGroupedVideos,
   likeArticle,
   shareArticle,
   fetchSportsSubcategories,
@@ -442,10 +443,21 @@ function takeLimitedItems(items, limit) {
   return (Number.isFinite(l) && l > 0) ? items.slice(0, l) : items;
 }
 
-const MAX_PAGINATED_PAGES = 50;
+const DEFAULT_PAGE_SIZE = 12;
+const MAX_PAGE_SIZE = 25;
+const MAX_PAGINATED_PAGES = 5;
+
+function normalizePageSize(value, fallback = DEFAULT_PAGE_SIZE) {
+  const size = Number(value ?? fallback);
+  if (!Number.isFinite(size) || size <= 0) {
+    return fallback;
+  }
+
+  return Math.min(Math.ceil(size), MAX_PAGE_SIZE);
+}
 
 async function fetchAllPaginatedPages(fetcher, options = {}) {
-  const pageSize = Math.max(options.pageSize || options.limit || 100, 100);
+  const pageSize = normalizePageSize(options.pageSize || options.limit);
   const firstPage = options.page ?? 1;
   const firstPayload = await fetcher({
     ...options,
@@ -498,7 +510,7 @@ function getExpandedArticleOptions(options = {}) {
   }
   if (options.page || options.pageSize || options.limit) {
     expanded.page = options.page ?? 1;
-    expanded.pageSize = Math.max(options.pageSize || options.limit || 20, 10);
+    expanded.pageSize = normalizePageSize(options.pageSize || options.limit);
   }
 
   return expanded;
@@ -508,6 +520,10 @@ function getExpandedVideoOptions(options = {}) {
   const expanded = { ...options };
   if (options.categorySlug) expanded.category = options.categorySlug;
   if (options.subcategorySlug) expanded.subcategory = options.subcategorySlug;
+  if (options.page || options.pageSize || options.limit) {
+    expanded.page = options.page ?? 1;
+    expanded.pageSize = normalizePageSize(options.pageSize || options.limit);
+  }
   return expanded;
 }
 
@@ -624,9 +640,33 @@ export function resolveMediaUrl(path) {
 }
 
 export async function getGroupedVideos(options = {}) {
+  try {
+    const payload = await fetchGroupedVideos(options);
+    if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+      return Object.entries(payload).reduce((groups, [category, videos]) => {
+        const key = slugify(category) || "uncategorized";
+        const normalizedVideos = toItemsArray(videos)
+          .map(normalizeVideo)
+          .filter(Boolean)
+          .map((video) => ({
+            ...video,
+            category_name: video.category_name || toTitleCase(key),
+          }));
+
+        return {
+          ...groups,
+          [key]: normalizedVideos,
+        };
+      }, {});
+    }
+  } catch (error) {
+    if (![404, 405].includes(error?.response?.status)) {
+      throw error;
+    }
+  }
+
   const payload = await getVideos(options);
   const videos = toItemsArray(payload);
-
   return videos.reduce((groups, video) => {
     const categorySlug = slugify(
       pickFirstString(

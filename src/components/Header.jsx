@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FiMoon, FiSun } from "react-icons/fi";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { hasStoredAuthToken } from "../auth";
@@ -7,9 +8,17 @@ import { primaryNavItems } from "../config/pageConfig";
 import { useTheme } from "../useTheme";
 
 function Header({ searchTarget }) {
+  const headerRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const educationNavIndex = primaryNavItems.findIndex(
+    (item) => item.label === "Education",
+  );
+  const mobileNavItems =
+    educationNavIndex >= 0
+      ? primaryNavItems.slice(0, educationNavIndex + 1)
+      : primaryNavItems;
   const queryFromUrl = new URLSearchParams(location.search).get("search") ?? "";
   const searchSyncKey = `${location.pathname}?${queryFromUrl}`;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -20,6 +29,57 @@ function Header({ searchTarget }) {
   });
   const searchValue =
     searchDraft.key === searchSyncKey ? searchDraft.value : queryFromUrl;
+
+  useEffect(() => {
+    function syncHeaderHeight() {
+      if (!headerRef.current) {
+        return;
+      }
+
+      document.documentElement.style.setProperty(
+        "--news-header-height",
+        `${headerRef.current.offsetHeight}px`,
+      );
+    }
+
+    syncHeaderHeight();
+    window.addEventListener("resize", syncHeaderHeight);
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(syncHeaderHeight);
+
+    if (headerRef.current && resizeObserver) {
+      resizeObserver.observe(headerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener("resize", syncHeaderHeight);
+      resizeObserver?.disconnect();
+      document.documentElement.style.removeProperty("--news-header-height");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      document.body.removeAttribute("data-mobile-menu-open");
+      document.body.style.overflow = "";
+      return undefined;
+    }
+
+    document.body.setAttribute("data-mobile-menu-open", "true");
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.removeAttribute("data-mobile-menu-open");
+      document.body.style.overflow = "";
+    };
+  }, [isMenuOpen]);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     function syncAuthState() {
@@ -134,73 +194,114 @@ function Header({ searchTarget }) {
   }
 
   return (
-    <nav className="news-header navbar border-bottom shadow-sm px-3 py-3">
-      <div className="container-fluid px-0">
-        <div className="news-header__inner w-100">
-          <div className="news-header__bar">
-            <div className="news-header__brand-block">
-              <Link to="/" className="news-header__brand" aria-label="News Around The Globe home">
-                <img
-                  src={myNewsLogo}
-                  alt="News Around The Globe"
-                  className="news-header__logo"
-                />
-              </Link>
-              <p className="news-header__meta small">
-                Breaking stories, sharp coverage, and updates across the globe
-              </p>
-            </div>
+    <>
+      <nav ref={headerRef} className="news-header navbar border-bottom shadow-sm px-3 py-3">
+        <div className="container-fluid px-0">
+          <div className="news-header__inner w-100">
+            <div className="news-header__bar">
+              <div className="news-header__brand-block">
+                <Link to="/" className="news-header__brand" aria-label="News Around The Globe home">
+                  <img
+                    src={myNewsLogo}
+                    alt="News Around The Globe"
+                    className="news-header__logo"
+                  />
+                </Link>
+                <p className="news-header__meta small" aria-label="Breaking stories, sharp coverage, and updates across the globe">
+                  <span className="news-header__ticker-track" aria-hidden="true">
+                    <span className="news-header__ticker-item">
+                      BREAKING STORIES, SHARP COVERAGE, AND UPDATES ACROSS THE GLOBE.
+                    </span>
+                    <span className="news-header__ticker-item">
+                      BREAKING STORIES, SHARP COVERAGE, AND UPDATES ACROSS THE GLOBE.
+                    </span>
+                  </span>
+                </p>
+              </div>
 
-            <div className="news-header__actions d-none d-lg-flex">
-              {renderSearchForm()}
-              {renderHeaderTools()}
-            </div>
+              <div className="news-header__actions d-none d-lg-flex">
+                {renderSearchForm()}
+                {renderHeaderTools()}
+              </div>
 
-            <button
-              type="button"
-              className={`news-header__toggle d-lg-none ${isMenuOpen ? "is-open" : ""}`.trim()}
-              aria-expanded={isMenuOpen}
-              aria-controls="primary-navigation"
-              aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-              onClick={() => setIsMenuOpen((currentValue) => !currentValue)}
-            >
-              <span />
-              <span />
-              <span />
-            </button>
-          </div>
+              <div className="news-header__mobile-actions d-lg-none">
+                {renderThemeToggle("news-header__theme--mobile")}
 
-          <div
-            id="primary-navigation"
-            className={`news-header__menu ${isMenuOpen ? "is-open" : ""}`.trim()}
-          >
-            {renderSearchForm("d-lg-none")}
-
-            <div className="news-header__status-wrap d-lg-none">
-              {renderHeaderTools()}
-            </div>
-
-            <div className="news-header__links">
-              {primaryNavItems.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === "/"}
-                  onClick={() => setIsMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `news-header__nav-link btn rounded-pill px-3 py-2 ${
-                      isActive ? "btn-danger" : "btn-outline-secondary"
-                    }`
-                  }
+                <button
+                  type="button"
+                  className={`news-header__toggle ${isMenuOpen ? "is-open" : ""}`.trim()}
+                  aria-expanded={isMenuOpen}
+                  aria-controls="mobile-navigation"
+                  aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                  onClick={() => setIsMenuOpen((currentValue) => !currentValue)}
                 >
-                  {item.label}
-                </NavLink>
-              ))}
+                  <span />
+                  <span />
+                  <span />
+                </button>
+              </div>
+            </div>
+
+            <div id="primary-navigation" className="news-header__menu d-none d-lg-flex">
+              <div className="news-header__links news-header__links--desktop">
+                {primaryNavItems.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === "/"}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `news-header__nav-link btn rounded-pill px-3 py-2 ${
+                        isActive ? "btn-danger" : "btn-outline-secondary"
+                      }`
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {typeof document !== "undefined"
+        ? createPortal(
+            <div
+              id="mobile-navigation"
+              className={`news-mobile-menu d-lg-none ${isMenuOpen ? "is-open" : ""}`.trim()}
+              aria-hidden={!isMenuOpen}
+            >
+              <div className="news-mobile-menu__panel">
+                {renderSearchForm()}
+
+                <div className="news-header__status-wrap">
+                  {renderAuthAction()}
+                </div>
+
+                <div className="news-header__links news-header__links--mobile">
+                  {mobileNavItems.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      end={item.path === "/"}
+                      onClick={() => setIsMenuOpen(false)}
+                      className={({ isActive }) =>
+                        `news-header__nav-link btn rounded-pill px-3 py-2 ${
+                          isActive ? "btn-danger" : "btn-outline-secondary"
+                        }`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 

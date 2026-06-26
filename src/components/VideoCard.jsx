@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { memo } from "react";
 import { formatPublishedDate } from "../utils/formatters";
 
 function VideoCard({ video }) {
@@ -18,6 +19,8 @@ function VideoCard({ video }) {
             src={thumbnailUrl}
             className="video-card-media"
             alt={video.title}
+            loading="lazy"
+            decoding="async"
           />
 
           <div
@@ -66,4 +69,4 @@ function VideoCard({ video }) {
   );
 }
 
-export default VideoCard;
+export default memo(VideoCard);

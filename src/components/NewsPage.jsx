@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "./Header";
 import Footer from "./Footer";
@@ -67,25 +67,26 @@ async function loadSection(section) {
     switch (section.source) {
       case "latestArticles":
         payload = await getLatestArticles({
-          allPages: true,
           categorySlug: section.categorySlug,
           subcategorySlug: section.subcategorySlug,
+          page: section.page ?? 1,
+          pageSize: section.limit || 10,
           limit: section.limit || 10,
         });
         break;
 
       case "trendingArticles":
         payload = await getTrendingArticles({
-          allPages: true,
           categorySlug: section.categorySlug,
           subcategorySlug: section.subcategorySlug,
+          page: section.page ?? 1,
+          pageSize: section.limit || 6,
           limit: section.limit || 6,
         });
         break;
 
       case "categoryArticles":
         payload = await getArticlesByCategory(section.categorySlug, {
-          allPages: true,
           subcategorySlug: section.subcategorySlug,
           page: section.page ?? 1,
           pageSize: section.limit || 12,
@@ -94,7 +95,6 @@ async function loadSection(section) {
 
       case "articles":
         payload = await getArticles({
-          allPages: true,
           categorySlug: section.categorySlug,
           subcategorySlug: section.subcategorySlug,
           page: section.page ?? 1,
@@ -104,17 +104,19 @@ async function loadSection(section) {
 
       case "categoryVideos":
         payload = await getVideosByCategory(section.categorySlug, {
-          allPages: true,
           subcategorySlug: section.subcategorySlug,
+          page: section.page ?? 1,
+          pageSize: section.limit || 6,
           limit: section.limit || 6,
         });
         break;
 
       case "videos":
         payload = await getVideos({
-          allPages: true,
           categorySlug: section.categorySlug,
           subcategorySlug: section.subcategorySlug,
+          page: section.page ?? 1,
+          pageSize: section.limit || 6,
           limit: section.limit || 6,
         });
         break;
@@ -225,20 +227,27 @@ function NewsPage({ pageConfig }) {
     };
   }, [showSidebar]);
 
-  const visibleSections = deferredSearchQuery
-    ? sections
-        .map((section) => ({
-          ...section,
-          items: section.items.filter((item) =>
-            matchesSearch(item, deferredSearchQuery),
-          ),
-        }))
-        .filter((section) => section.items.length > 0)
-    : sections;
+  const visibleSections = useMemo(() => {
+    if (!deferredSearchQuery) {
+      return sections;
+    }
 
-  const totalMatches = visibleSections.reduce(
-    (matchCount, section) => matchCount + section.items.length,
-    0,
+    return sections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          matchesSearch(item, deferredSearchQuery),
+        ),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [deferredSearchQuery, sections]);
+
+  const totalMatches = useMemo(
+    () => visibleSections.reduce(
+      (matchCount, section) => matchCount + section.items.length,
+      0,
+    ),
+    [visibleSections],
   );
 
   return (
