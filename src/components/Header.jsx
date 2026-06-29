@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { FiMoon, FiSun } from "react-icons/fi";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { hasStoredAuthToken } from "../auth";
@@ -12,13 +11,6 @@ function Header({ searchTarget }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const educationNavIndex = primaryNavItems.findIndex(
-    (item) => item.label === "Education",
-  );
-  const mobileNavItems =
-    educationNavIndex >= 0
-      ? primaryNavItems.slice(0, educationNavIndex + 1)
-      : primaryNavItems;
   const queryFromUrl = new URLSearchParams(location.search).get("search") ?? "";
   const searchSyncKey = `${location.pathname}?${queryFromUrl}`;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -60,22 +52,6 @@ function Header({ searchTarget }) {
       document.documentElement.style.removeProperty("--news-header-height");
     };
   }, []);
-
-  useEffect(() => {
-    if (!isMenuOpen) {
-      document.body.removeAttribute("data-mobile-menu-open");
-      document.body.style.overflow = "";
-      return undefined;
-    }
-
-    document.body.setAttribute("data-mobile-menu-open", "true");
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.removeAttribute("data-mobile-menu-open");
-      document.body.style.overflow = "";
-    };
-  }, [isMenuOpen]);
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -265,42 +241,37 @@ function Header({ searchTarget }) {
         </div>
       </nav>
 
-      {typeof document !== "undefined"
-        ? createPortal(
-            <div
-              id="mobile-navigation"
-              className={`news-mobile-menu d-lg-none ${isMenuOpen ? "is-open" : ""}`.trim()}
-              aria-hidden={!isMenuOpen}
-            >
-              <div className="news-mobile-menu__panel">
-                {renderSearchForm()}
+      <div
+        id="mobile-navigation"
+        className={`news-mobile-menu d-lg-none ${isMenuOpen ? "is-open" : ""}`.trim()}
+        aria-hidden={!isMenuOpen}
+      >
+        <div className="news-mobile-menu__panel">
+          {renderSearchForm()}
 
-                <div className="news-header__status-wrap">
-                  {renderAuthAction()}
-                </div>
+          <div className="news-header__status-wrap">
+            {renderAuthAction()}
+          </div>
 
-                <div className="news-header__links news-header__links--mobile">
-                  {mobileNavItems.map((item) => (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      end={item.path === "/"}
-                      onClick={() => setIsMenuOpen(false)}
-                      className={({ isActive }) =>
-                        `news-header__nav-link btn rounded-pill px-3 py-2 ${
-                          isActive ? "btn-danger" : "btn-outline-secondary"
-                        }`
-                      }
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+          <div className="news-header__links news-header__links--mobile">
+            {primaryNavItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.path === "/"}
+                onClick={() => setIsMenuOpen(false)}
+                className={({ isActive }) =>
+                  `news-header__nav-link btn rounded-pill px-3 py-2 ${
+                    isActive ? "btn-danger" : "btn-outline-secondary"
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      </div>
     </>
   );
 }

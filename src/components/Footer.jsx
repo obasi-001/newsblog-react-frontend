@@ -15,7 +15,7 @@ const contactLinks = [
   },
   {
     label: "Contact Okwi Int'l Tech on LinkedIn",
-    href: "https://www.linkedin.com/in/okwivexxx",
+    href: "https://www.linkedin.com/in/okwudiri-obasi-371290419",
     Icon: FaLinkedinIn,
   },
   {
@@ -25,12 +25,12 @@ const contactLinks = [
   },
   {
     label: "Follow Okwi Int'l Tech on Facebook",
-    href: "https://www.facebook.com/okwivexxx",
+    href: "https://www.facebook.com/okwivex",
     Icon: FaFacebookF,
   },
   {
     label: "Follow Okwi Int'l Tech on Instagram",
-    href: "https://www.instagram.com/okwivexxx",
+    href: "https://www.instagram.com/obasii.001",
     Icon: FaInstagram,
   },
 ];
