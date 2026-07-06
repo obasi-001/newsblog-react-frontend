@@ -46,7 +46,13 @@ function toCount(value) {
 
 function toParagraphs(value) {
   if (Array.isArray(value)) return value.map(p => String(p ?? "").trim()).filter(Boolean);
-  if (typeof value === "string") return value.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+  if (typeof value === "string") {
+    return value
+      .replace(/\r\n?/g, "\n")
+      .split(/\n+/)
+      .map(p => p.trim())
+      .filter(Boolean);
+  }
   return [];
 }
 
@@ -165,6 +171,114 @@ function normalizeCommentsCollection(value) {
   return [];
 }
 
+function toFirstCollection(...values) {
+  for (const value of values) {
+    if (Array.isArray(value)) return value;
+    if (Array.isArray(value?.results)) return value.results;
+    if (Array.isArray(value?.data)) return value.data;
+    if (Array.isArray(value?.items)) return value.items;
+    if (typeof value === "string" && value.trim()) return [value];
+    if (value && typeof value === "object") return [value];
+  }
+
+  return [];
+}
+
+function normalizeArticleDetailImage(record, index) {
+  if (typeof record === "string") {
+    const image = record.trim();
+
+    return image
+      ? {
+        id: `${image}-${index}`,
+        image,
+        caption: "",
+        image_alt: "",
+        order: index + 1,
+      }
+      : null;
+  }
+
+  if (!record || typeof record !== "object") return null;
+
+  const image = pickFirstString(
+    record.image,
+    record.image_url,
+    record.url,
+    record.file,
+    record.src,
+  );
+
+  if (!image) return null;
+
+  const explicitOrder = Number(
+    record.order ?? record.position ?? record.sort_order,
+  );
+
+  return {
+    id: record.id ?? record.pk ?? `${image}-${index}`,
+    image,
+    caption: pickFirstString(
+      record.caption,
+      record.title,
+      record.description,
+    ),
+    image_alt: pickFirstString(
+      record.image_alt,
+      record.alt_text,
+      record.caption,
+      record.title,
+    ),
+    order: Number.isFinite(explicitOrder) ? explicitOrder : index + 1,
+  };
+}
+
+function getNormalizedDetailImageKey(detailImage) {
+  const imagePath = detailImage.image.split("?")[0];
+  const fileName = imagePath.split("/").pop() ?? imagePath;
+  const extensionIndex = fileName.lastIndexOf(".");
+  const fileStem = extensionIndex >= 0 ? fileName.slice(0, extensionIndex) : fileName;
+  const normalizedStem = fileStem.replace(/_[a-z0-9]{7}$/i, "");
+  const captionKey = detailImage.caption.trim().toLowerCase();
+
+  return `${normalizedStem}|${captionKey}|${detailImage.order}`;
+}
+
+function dedupeArticleDetailImages(detailImages) {
+  const seen = new Set();
+
+  return detailImages.filter((detailImage) => {
+    const key = getNormalizedDetailImageKey(detailImage);
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+
+    return true;
+  });
+}
+
+function normalizeArticleDetailImages(record) {
+  const detailImages = toFirstCollection(
+    record.detail_images,
+    record.detailImages,
+    record.detail_image,
+    record.details_images,
+    record.detailsImages,
+    record.details_image,
+    record.article_images,
+    record.articleImages,
+    record.gallery,
+    record.images,
+    record.newimage_details,
+    record.new_image_details,
+  )
+    .map(normalizeArticleDetailImage)
+    .filter(Boolean)
+    .sort((a, b) => a.order - b.order);
+
+  return dedupeArticleDetailImages(detailImages);
+}
+
 function normalizeEngagementAction(payload, fallbackCounts = {}) {
   const source = payload?.article && typeof payload.article === "object"
     ? payload.article
@@ -238,9 +352,10 @@ function normalizeArticle(record) {
     body: toParagraphs(record.body ?? record.content ?? record.article_body ?? record.text),
     image: pickFirstString(record.image, record.image_url, record.featured_image, record.thumbnail, record.cover_image),
     image_alt: pickFirstString(record.image_alt, record.alt_text, record.title),
+    detail_images: normalizeArticleDetailImages(record),
     category: normalizeCategory(record),
     source: pickFirstString(record.source, record.source_name, "MyNews"),
-    author: pickFirstString(record.author, record.author_name, "Editorial Desk"),
+    author: pickFirstString(record.author, record.author_name),
     published_at: pickFirstString(record.published_at, record.published_date, record.created_at),
     likes_count: counts.likes_count,
     comments_count: counts.comments_count,

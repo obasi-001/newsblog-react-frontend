@@ -15,6 +15,176 @@ import { getCategoryPath } from "../config/pageConfig";
 import { getApiErrorMessage } from "../utils/apiErrors";
 import { formatDateTime, formatPublishedDate } from "../utils/formatters";
 
+const IMAGE_SHORTCODE_PATTERN = /\[(?:IMAGE|DETAIL_IMAGE|DETAILS_IMAGE)(?:\s*:\s*(\d+))?\]/gi;
+
+function hasImageShortcode(paragraphs) {
+  return paragraphs.some((paragraph) =>
+    new RegExp(IMAGE_SHORTCODE_PATTERN.source, "i").test(paragraph),
+  );
+}
+
+function getNextUnusedImage(detailImages, usedImageIndexes) {
+  const imageIndex = detailImages.findIndex((_, index) => !usedImageIndexes.has(index));
+
+  if (imageIndex < 0) return null;
+
+  usedImageIndexes.add(imageIndex);
+  return {
+    detailImage: detailImages[imageIndex],
+    imageIndex,
+  };
+}
+
+function getShortcodeImage(detailImages, shortcodeIndex, usedImageIndexes) {
+  const explicitIndex = Number(shortcodeIndex);
+
+  if (Number.isFinite(explicitIndex) && explicitIndex > 0) {
+    const imageIndex = explicitIndex - 1;
+    const detailImage = detailImages[imageIndex];
+
+    if (!detailImage) return null;
+
+    usedImageIndexes.add(imageIndex);
+    return { detailImage, imageIndex };
+  }
+
+  return getNextUnusedImage(detailImages, usedImageIndexes);
+}
+
+function getAutomaticImageSlots(paragraphCount, imageCount) {
+  if (paragraphCount <= 0 || imageCount <= 0) return new Map();
+
+  const slots = new Map();
+  const imagesToPlace = Math.min(imageCount, paragraphCount, 3);
+
+  for (let imageIndex = 0; imageIndex < imagesToPlace; imageIndex += 1) {
+    const paragraphIndex = Math.min(
+      paragraphCount - 1,
+      Math.floor(((imageIndex + 1) * paragraphCount) / (imagesToPlace + 1)),
+    );
+
+    if (!slots.has(paragraphIndex)) {
+      slots.set(paragraphIndex, []);
+    }
+
+    slots.get(paragraphIndex).push(imageIndex);
+  }
+
+  return slots;
+}
+
+function buildArticleContentBlocks(paragraphs, detailImages) {
+  if (!hasImageShortcode(paragraphs)) {
+    const imageSlots = getAutomaticImageSlots(
+      paragraphs.length,
+      detailImages.length,
+    );
+
+    return paragraphs.flatMap((paragraph, paragraphIndex) => {
+      const blocks = [
+        {
+          key: `paragraph-${paragraphIndex}`,
+          text: paragraph,
+          type: "paragraph",
+        },
+      ];
+      const imageIndexes = imageSlots.get(paragraphIndex) ?? [];
+
+      imageIndexes.forEach((imageIndex) => {
+        const detailImage = detailImages[imageIndex];
+
+        if (!detailImage) return;
+
+        blocks.push({
+          detailImage,
+          imageIndex,
+          key: `fallback-image-${paragraphIndex}-${imageIndex}`,
+          type: "image",
+        });
+      });
+
+      return blocks;
+    });
+  }
+
+  const usedImageIndexes = new Set();
+
+  return paragraphs.flatMap((paragraph, paragraphIndex) => {
+    const blocks = [];
+    const pattern = new RegExp(IMAGE_SHORTCODE_PATTERN.source, "gi");
+    let lastMatchEnd = 0;
+    let match;
+    let textPartIndex = 0;
+
+    while ((match = pattern.exec(paragraph)) !== null) {
+      const textBeforeImage = paragraph.slice(lastMatchEnd, match.index).trim();
+
+      if (textBeforeImage) {
+        blocks.push({
+          key: `paragraph-${paragraphIndex}-${textPartIndex}`,
+          text: textBeforeImage,
+          type: "paragraph",
+        });
+        textPartIndex += 1;
+      }
+
+      const shortcodeImage = getShortcodeImage(
+        detailImages,
+        match[1],
+        usedImageIndexes,
+      );
+
+      if (shortcodeImage) {
+        blocks.push({
+          detailImage: shortcodeImage.detailImage,
+          imageIndex: shortcodeImage.imageIndex,
+          key: `shortcode-image-${paragraphIndex}-${match.index}`,
+          type: "image",
+        });
+      }
+
+      lastMatchEnd = pattern.lastIndex;
+    }
+
+    const textAfterLastImage = paragraph.slice(lastMatchEnd).trim();
+
+    if (textAfterLastImage) {
+      blocks.push({
+        key: `paragraph-${paragraphIndex}-${textPartIndex}`,
+        text: textAfterLastImage,
+        type: "paragraph",
+      });
+    }
+
+    return blocks;
+  });
+}
+
+function DetailImageFigure({ articleTitle, detailImage, imageIndex }) {
+  return (
+    <div className="detail-image-gallery">
+      <figure className="detail-image-gallery__item">
+        <img
+          src={resolveMediaUrl(detailImage.image)}
+          alt={
+            detailImage.image_alt
+            || detailImage.caption
+            || `${articleTitle} image ${imageIndex + 1}`
+          }
+          className="detail-image-gallery__image"
+          loading="lazy"
+          decoding="async"
+        />
+        {detailImage.caption ? (
+          <figcaption className="detail-image-gallery__caption">
+            {detailImage.caption}
+          </figcaption>
+        ) : null}
+      </figure>
+    </div>
+  );
+}
+
 function ArticleDetail() {
   const { articleId } = useParams();
   const location = useLocation();
@@ -195,6 +365,18 @@ function ArticleDetail() {
     article?.comments_count ?? 0,
     comments.length,
   );
+  const detailImages = article?.detail_images ?? [];
+  const articleContentBlocks = buildArticleContentBlocks(
+    article?.body ?? [],
+    detailImages,
+  );
+  const articleAuthor = String(article?.author ?? "").trim();
+  const articleSource = String(article?.source ?? "").trim();
+  const hasDistinctAuthor = Boolean(
+    articleAuthor
+    && (!articleSource || articleAuthor.toLowerCase() !== articleSource.toLowerCase()),
+  );
+  const hasByline = Boolean(articleAuthor || articleSource);
 
   return (
     <>
@@ -240,11 +422,20 @@ function ArticleDetail() {
 
               <p className="lead text-secondary">{article.excerpt}</p>
 
-              <div className="d-flex flex-wrap gap-3 small text-secondary mb-4">
-                <span>
-                  <strong>{article.author}</strong> for {article.source}
-                </span>
-              </div>
+              {hasByline ? (
+                <div className="d-flex flex-wrap gap-3 small text-secondary mb-4">
+                  <span>
+                    {hasDistinctAuthor ? (
+                      <>
+                        <strong>{articleAuthor}</strong>
+                        {articleSource ? ` for ${articleSource}` : null}
+                      </>
+                    ) : (
+                      <strong>{articleSource || articleAuthor}</strong>
+                    )}
+                  </span>
+                </div>
+              ) : null}
 
               <div className="mb-4">
                 <EngagementBar
@@ -259,10 +450,23 @@ function ArticleDetail() {
               </div>
 
               <div className="d-flex flex-column gap-3">
-                {article.body.map((paragraph, index) => (
-                  <p key={`${index}-${paragraph.slice(0, 32)}`} className="mb-0 text-dark">
-                    {paragraph}
-                  </p>
+                {articleContentBlocks.map((block) => (
+                  <div
+                    key={block.key}
+                    className="article-body-block"
+                  >
+                    {block.type === "paragraph" ? (
+                      <p className="mb-0 text-dark">
+                        {block.text}
+                      </p>
+                    ) : (
+                      <DetailImageFigure
+                        articleTitle={article.title}
+                        detailImage={block.detailImage}
+                        imageIndex={block.imageIndex}
+                      />
+                    )}
+                  </div>
                 ))}
               </div>
 

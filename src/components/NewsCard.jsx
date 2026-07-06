@@ -9,6 +9,13 @@ function NewsCard({ article }) {
   const imageUrl = resolveMediaUrl(article.image);
   const placeholderImage = "/images/news-placeholder.jpg";
   const usesPlaceholderImage = !imageUrl;
+  const articleAuthor = String(article.author ?? "").trim();
+  const articleSource = String(article.source ?? "").trim();
+  const hasDistinctAuthor = Boolean(
+    articleAuthor
+    && (!articleSource || articleAuthor.toLowerCase() !== articleSource.toLowerCase()),
+  );
+  const hasByline = Boolean(articleAuthor || articleSource);
 
   const handleImageError = (e) => {
     e.target.onerror = null;
@@ -78,14 +85,26 @@ function NewsCard({ article }) {
         </p>
 
         <div className="news-card__footer mt-auto">
-          <p className="small mb-2">
-            <span className="fw-semibold">
-              {article.author}
-            </span>
-            <span className="text-secondary">
-              {" "}for {article.source}
-            </span>
-          </p>
+          {hasByline ? (
+            <p className="small mb-2">
+              {hasDistinctAuthor ? (
+                <>
+                  <span className="fw-semibold">
+                    {articleAuthor}
+                  </span>
+                  {articleSource ? (
+                    <span className="text-secondary">
+                      {" "}for {articleSource}
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="fw-semibold">
+                  {articleSource || articleAuthor}
+                </span>
+              )}
+            </p>
+          ) : null}
 
           <div className="position-relative z-1">
             <EngagementBar
