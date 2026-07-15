@@ -183,8 +183,10 @@ export const registerUser = async (data) => {
   return response.data;
 };
 
-export const verifyEmail = async (uidb64, token) => {
-  const response = await API.get(`auth/verify/${uidb64}/${token}/`);
+export const verifyEmail = async (uid, token) => {
+  const response = await API.get(`auth/verify/${uid}/${token}/`, {
+    skipAuth: true,
+  });
   return response.data;
 };
 

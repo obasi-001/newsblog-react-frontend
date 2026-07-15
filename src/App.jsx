@@ -18,7 +18,7 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import ResetPasswordConfirm from "./pages/ResetPasswordConfirm";
 import Logout from "./pages/Logout";
-import VerifyEmail from "./pages/VerifyEmail";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import SiteControls from "./components/SiteControls";
 
 function App() {
@@ -44,9 +44,9 @@ function App() {
         <Route path="/reset-password/:uidb64/:token" element={<ResetPasswordConfirm />} />
         <Route path="/password-reset/:uidb64/:token" element={<ResetPasswordConfirm />} />
         <Route path="/auth/reset-password/:uidb64/:token" element={<ResetPasswordConfirm />} />
-        <Route path="/verify/:uidb64/:token" element={<VerifyEmail />} />
-        <Route path="/verify-email/:uidb64/:token" element={<VerifyEmail />} />
-        <Route path="/auth/verify/:uidb64/:token" element={<VerifyEmail />} />
+        <Route path="/verify/:uid/:token" element={<VerifyEmailPage />} />
+        <Route path="/verify-email/:uid/:token" element={<VerifyEmailPage />} />
+        <Route path="/auth/verify/:uid/:token" element={<VerifyEmailPage />} />
         <Route path="/logout" element={<Logout />} />
         <Route path="/articles/:articleId" element={<ArticleDetail />} />
         <Route path="/videos" element={<VideosHome />} />
