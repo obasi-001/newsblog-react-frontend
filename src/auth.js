@@ -9,62 +9,14 @@ import { getApiErrorMessage } from "./utils/apiErrors";
 
 const passwordResetRequestCandidates = [
   {
-    url: "auth/password/reset/",
-    buildData: (email) => ({ email }),
-  },
-  {
-    url: "auth/users/reset_password/",
-    buildData: (email) => ({ email }),
-  },
-  {
     url: "auth/forgot-password/",
-    buildData: (email) => ({ email }),
-  },
-  {
-    url: "auth/reset-password/",
     buildData: (email) => ({ email }),
   },
 ];
 
 const passwordResetConfirmCandidates = [
   {
-    url: "auth/password/reset/confirm/",
-    buildData: ({ uid, token, password, password2 }) => ({
-      uid,
-      token,
-      new_password: password,
-      re_new_password: password2,
-    }),
-  },
-  {
-    url: "auth/users/reset_password_confirm/",
-    buildData: ({ uid, token, password, password2 }) => ({
-      uid,
-      token,
-      new_password: password,
-      re_new_password: password2,
-    }),
-  },
-  {
-    url: "auth/password/reset-confirm/",
-    buildData: ({ uid, token, password, password2 }) => ({
-      uidb64: uid,
-      token,
-      password,
-      password2,
-    }),
-  },
-  {
-    url: "auth/reset-password/confirm/",
-    buildData: ({ uid, token, password, password2 }) => ({
-      uidb64: uid,
-      token,
-      password,
-      password2,
-    }),
-  },
-  {
-    url: ({ uid, token }) => `auth/password/reset/${uid}/${token}/`,
+    url: ({ uid, token }) => `auth/reset-password/${uid}/${token}/`,
     buildData: ({ password, password2 }) => ({
       password,
       password2,
