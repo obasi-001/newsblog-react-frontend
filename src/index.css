@@ -627,11 +627,6 @@ body[data-theme="dark"] .news-header__theme:focus {
   width: 100%;
 }
 
-.content-section {
-  content-visibility: auto;
-  contain-intrinsic-size: 520px;
-}
-
 .news-card,
 .video-card {
   contain: layout paint;
