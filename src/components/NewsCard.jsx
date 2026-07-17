@@ -1,11 +1,13 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { memo, useCallback, useState } from "react";
 import EngagementBar from "./EngagementBar";
 import { preloadArticleById, resolveMediaUrl } from "../api/newsApi";
 import { getCategoryPath } from "../config/pageConfig";
+import { rememberCurrentScrollPosition } from "../utils/scrollMemory";
 import { formatPublishedDate } from "../utils/formatters";
 
 function NewsCard({ article, priority = false }) {
+  const location = useLocation();
   const imageUrl = resolveMediaUrl(article.image);
   const placeholderImage = "/images/news-placeholder.jpg";
   const articlePath = `/articles/${article.id}`;
@@ -30,6 +32,11 @@ function NewsCard({ article, priority = false }) {
   const handleArticleIntent = useCallback(() => {
     preloadArticleById(article.id);
   }, [article.id]);
+
+  const handleArticleOpen = useCallback(() => {
+    rememberCurrentScrollPosition(location);
+    preloadArticleById(article.id);
+  }, [article.id, location]);
 
   return (
     <article
@@ -82,7 +89,8 @@ function NewsCard({ article, priority = false }) {
           to={articlePath}
           state={{ articlePreview: article }}
           className="text-dark text-decoration-none stretched-link"
-          onPointerDown={handleArticleIntent}
+          onClick={handleArticleOpen}
+          onPointerDown={handleArticleOpen}
         >
           <h3 className="news-card__title h5 fw-semibold">
             {article.title}

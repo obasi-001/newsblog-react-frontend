@@ -1,22 +1,9 @@
 import { useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
-
-const scrollPositions = new Map();
-
-function getScrollKey(location) {
-  return location.key || `${location.pathname}${location.search}${location.hash}`;
-}
-
-function saveScrollPosition(location) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  scrollPositions.set(getScrollKey(location), {
-    x: window.scrollX,
-    y: window.scrollY,
-  });
-}
+import {
+  getRememberedScrollPosition,
+  rememberCurrentScrollPosition,
+} from "../utils/scrollMemory";
 
 function scrollWithoutAnimation(x, y) {
   const root = document.documentElement;
@@ -42,7 +29,7 @@ function restoreScrollPosition(location) {
     return () => {};
   }
 
-  const position = scrollPositions.get(getScrollKey(location)) ?? { x: 0, y: 0 };
+  const position = getRememberedScrollPosition(location);
   const restore = () => scrollWithoutAnimation(position.x, position.y);
   const animationFrame = window.requestAnimationFrame(restore);
   const shortRetry = window.setTimeout(restore, 80);
@@ -59,14 +46,14 @@ function ScrollRestoration() {
   const location = useLocation();
 
   useLayoutEffect(() => {
-    const handlePageHide = () => saveScrollPosition(location);
+    const handlePageHide = () => rememberCurrentScrollPosition(location);
     const cleanupRestore = restoreScrollPosition(location);
 
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
       cleanupRestore();
-      saveScrollPosition(location);
+      rememberCurrentScrollPosition(location);
       window.removeEventListener("pagehide", handlePageHide);
     };
   }, [location]);
