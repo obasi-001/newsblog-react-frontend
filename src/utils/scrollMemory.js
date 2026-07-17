@@ -1,4 +1,5 @@
 const scrollPositions = new Map();
+const scrollAnchors = new Map();
 
 function getEntryScrollKey(location) {
   return location.key ? `entry:${location.key}` : "";
@@ -40,10 +41,30 @@ export function rememberCurrentScrollPosition(location) {
   });
 }
 
+export function rememberCurrentScrollAnchor(location, anchorId, element) {
+  if (typeof window === "undefined" || !isFeedRoute(location) || !anchorId || !element) {
+    rememberCurrentScrollPosition(location);
+    return;
+  }
+
+  const rect = element.getBoundingClientRect();
+
+  rememberCurrentScrollPosition(location);
+  scrollAnchors.set(getPathScrollKey(location), {
+    id: anchorId,
+    viewportTop: rect.top,
+    viewportLeft: rect.left,
+  });
+}
+
 export function getRememberedScrollPosition(location) {
   const entryKey = getEntryScrollKey(location);
 
   return (entryKey ? scrollPositions.get(entryKey) : null)
     ?? (isFeedRoute(location) ? scrollPositions.get(getPathScrollKey(location)) : null)
     ?? { x: 0, y: 0 };
+}
+
+export function getRememberedScrollAnchor(location) {
+  return isFeedRoute(location) ? scrollAnchors.get(getPathScrollKey(location)) : null;
 }

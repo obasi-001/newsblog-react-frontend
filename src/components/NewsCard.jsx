@@ -3,7 +3,7 @@ import { memo, useCallback, useState } from "react";
 import EngagementBar from "./EngagementBar";
 import { preloadArticleById, resolveMediaUrl } from "../api/newsApi";
 import { getCategoryPath } from "../config/pageConfig";
-import { rememberCurrentScrollPosition } from "../utils/scrollMemory";
+import { rememberCurrentScrollAnchor } from "../utils/scrollMemory";
 import { formatPublishedDate } from "../utils/formatters";
 
 function NewsCard({ article, priority = false }) {
@@ -11,6 +11,7 @@ function NewsCard({ article, priority = false }) {
   const imageUrl = resolveMediaUrl(article.image);
   const placeholderImage = "/images/news-placeholder.jpg";
   const articlePath = `/articles/${article.id}`;
+  const scrollAnchor = `article-${article.id}`;
   const [failedImageUrl, setFailedImageUrl] = useState("");
   const imageFailed = Boolean(imageUrl && failedImageUrl === imageUrl);
   const usesPlaceholderImage = !imageUrl || imageFailed;
@@ -33,16 +34,21 @@ function NewsCard({ article, priority = false }) {
     preloadArticleById(article.id);
   }, [article.id]);
 
-  const handleArticleOpen = useCallback(() => {
-    rememberCurrentScrollPosition(location);
+  const handleArticleOpen = useCallback((event) => {
+    rememberCurrentScrollAnchor(
+      location,
+      scrollAnchor,
+      event.currentTarget.closest("[data-scroll-anchor]"),
+    );
     preloadArticleById(article.id);
-  }, [article.id, location]);
+  }, [article.id, location, scrollAnchor]);
 
   return (
     <article
       className={`news-card ${
         imageUrl ? "news-card--has-image" : "news-card--no-image"
       } card border-0 shadow-sm h-100 overflow-hidden`}
+      data-scroll-anchor={scrollAnchor}
       onFocusCapture={handleArticleIntent}
       onMouseEnter={handleArticleIntent}
     >

@@ -1,6 +1,7 @@
 import { useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
 import {
+  getRememberedScrollAnchor,
   getRememberedScrollPosition,
   rememberCurrentScrollPosition,
 } from "../utils/scrollMemory";
@@ -12,6 +13,11 @@ function scrollWithoutAnimation(x, y) {
   root.style.scrollBehavior = "auto";
   window.scrollTo(x, y);
   root.style.scrollBehavior = previousScrollBehavior;
+}
+
+function findScrollAnchor(anchorId) {
+  return Array.from(document.querySelectorAll("[data-scroll-anchor]"))
+    .find((element) => element.dataset.scrollAnchor === anchorId);
 }
 
 function restoreScrollPosition(location) {
@@ -30,7 +36,23 @@ function restoreScrollPosition(location) {
   }
 
   const position = getRememberedScrollPosition(location);
-  const restore = () => scrollWithoutAnimation(position.x, position.y);
+  const anchor = getRememberedScrollAnchor(location);
+  const restore = () => {
+    if (anchor) {
+      const element = findScrollAnchor(anchor.id);
+
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        scrollWithoutAnimation(
+          position.x,
+          Math.max(0, window.scrollY + rect.top - anchor.viewportTop),
+        );
+        return;
+      }
+    }
+
+    scrollWithoutAnimation(position.x, position.y);
+  };
   const animationFrame = window.requestAnimationFrame(restore);
   const shortRetry = window.setTimeout(restore, 80);
   const layoutRetry = window.setTimeout(restore, 240);
