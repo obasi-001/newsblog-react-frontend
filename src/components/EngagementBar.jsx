@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
 import { FiCheck, FiCopy, FiHeart, FiLink, FiMail, FiMessageCircle, FiShare2 } from "react-icons/fi";
@@ -8,8 +8,13 @@ import { getApiErrorMessage } from "../utils/apiErrors";
 import { formatCompactCount } from "../utils/formatters";
 
 const LIKED_ARTICLES_STORAGE_KEY = "mynews-liked-articles";
+let likedArticlesCache = null;
 
 function readLikedArticles() {
+  if (likedArticlesCache) {
+    return likedArticlesCache;
+  }
+
   if (typeof window === "undefined") {
     return {};
   }
@@ -21,8 +26,10 @@ function readLikedArticles() {
     }
 
     const parsedValue = JSON.parse(rawValue);
-    return parsedValue && typeof parsedValue === "object" ? parsedValue : {};
+    likedArticlesCache = parsedValue && typeof parsedValue === "object" ? parsedValue : {};
+    return likedArticlesCache;
   } catch {
+    likedArticlesCache = {};
     return {};
   }
 }
@@ -36,6 +43,7 @@ function writeLikedArticles(value) {
     LIKED_ARTICLES_STORAGE_KEY,
     JSON.stringify(value),
   );
+  likedArticlesCache = value;
 }
 
 function getAbsoluteArticleUrl(articlePath = "", articleId) {
@@ -407,4 +415,4 @@ function EngagementBar({
   );
 }
 
-export default EngagementBar;
+export default memo(EngagementBar);

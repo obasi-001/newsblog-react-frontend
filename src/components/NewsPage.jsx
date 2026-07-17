@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "./Header";
 import Footer from "./Footer";
@@ -32,6 +32,126 @@ function toSectionMeta(payload) {
   };
 }
 
+const PAGE_CACHE_TTL_MS = 2 * 60 * 1000;
+const HOME_COLLECTION_PAGE_SIZE = 25;
+const pageMemoryCache = new Map();
+
+function getPageCacheKey(pageConfig) {
+  const sectionsKey = pageConfig.sections
+    .map((section) => [
+      section.key,
+      section.source,
+      section.categorySlug ?? "",
+      section.subcategorySlug ?? "",
+      section.limit ?? "",
+      section.page ?? "",
+      section.type ?? "article",
+    ].join(":"))
+    .join("|");
+
+  return `${pageConfig.slug}:${sectionsKey}`;
+}
+
+function readCachedPage(cacheKey) {
+  return pageMemoryCache.get(cacheKey) ?? null;
+}
+
+function writeCachedPage(cacheKey, sections) {
+  pageMemoryCache.set(cacheKey, {
+    sections,
+    updatedAt: Date.now(),
+  });
+}
+
+function isCachedPageFresh(cachedPage) {
+  return Boolean(cachedPage) && Date.now() - cachedPage.updatedAt < PAGE_CACHE_TTL_MS;
+}
+
+function scheduleStateUpdate(callback) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(callback);
+    return;
+  }
+
+  Promise.resolve().then(callback);
+}
+
+function slugifyLocal(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function getItemCategorySlug(item) {
+  return slugifyLocal(
+    item.category?.slug
+      ?? item.category_slug
+      ?? item.category_name
+      ?? item.category?.name,
+  );
+}
+
+function getItemSubcategorySlugs(item) {
+  return [
+    item.subcategory?.slug,
+    item.subcategory_slug,
+    item.sports_unit_slug,
+    item.sport_slug,
+  ].map(slugifyLocal).filter(Boolean);
+}
+
+function comparePublishedNewestFirst(a, b) {
+  return new Date(b.published_at ?? b.published_date ?? 0)
+    - new Date(a.published_at ?? a.published_date ?? 0);
+}
+
+function filterAggregateItems(items, section) {
+  return items.filter((item) => {
+    if (section.categorySlug && getItemCategorySlug(item) !== slugifyLocal(section.categorySlug)) {
+      return false;
+    }
+
+    if (section.subcategorySlug) {
+      return getItemSubcategorySlugs(item).includes(slugifyLocal(section.subcategorySlug));
+    }
+
+    return true;
+  });
+}
+
+function takeSectionLimit(items, limit) {
+  const normalizedLimit = Number(limit);
+
+  return Number.isFinite(normalizedLimit) && normalizedLimit > 0
+    ? items.slice(0, normalizedLimit)
+    : items;
+}
+
+function buildAggregateSection(section, articles, videos) {
+  const sourceItems = section.type === "video" ? videos : articles;
+  let filteredItems = filterAggregateItems(sourceItems, section);
+
+  if (section.source === "latestArticles" || section.type === "video") {
+    filteredItems = [...filteredItems].sort(comparePublishedNewestFirst);
+  } else if (section.source === "trendingArticles") {
+    filteredItems = [...filteredItems].sort(
+      (a, b) => (b.likes_count || 0) - (a.likes_count || 0),
+    );
+  }
+
+  return {
+    ...section,
+    items: takeSectionLimit(filteredItems, section.limit),
+    meta: {
+      count: filteredItems.length,
+      next: null,
+      previous: null,
+    },
+  };
+}
+
 function matchesSearch(item, query) {
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -57,10 +177,6 @@ function matchesSearch(item, query) {
 }
 
 async function loadSection(section) {
-  console.log(
-    `Loading ${section.source} for category "${section.categorySlug || "all"}" and subcategory "${section.subcategorySlug || "none"}".`,
-  );
-
   try {
     let payload;
 
@@ -125,11 +241,6 @@ async function loadSection(section) {
         payload = await getArticles({ limit: 10 });
     }
 
-    const items = toSectionItems(payload);
-    console.log(
-      `Loaded ${items.length} items for ${section.source} (${section.categorySlug || "all"} / ${section.subcategorySlug || "none"}).`,
-    );
-
     return payload;
   } catch (error) {
     console.error(
@@ -140,47 +251,119 @@ async function loadSection(section) {
   }
 }
 
+async function loadHomeSections(pageConfig) {
+  const [articlesResult, videosResult] = await Promise.allSettled([
+    getArticles({ allPages: true, pageSize: HOME_COLLECTION_PAGE_SIZE }),
+    getVideos({ allPages: true, pageSize: HOME_COLLECTION_PAGE_SIZE }),
+  ]);
+
+  if (articlesResult.status === "rejected") {
+    console.error("Failed to load cached homepage article collection:", articlesResult.reason);
+  }
+
+  if (videosResult.status === "rejected") {
+    console.error("Failed to load cached homepage video collection:", videosResult.reason);
+  }
+
+  const articles = articlesResult.status === "fulfilled"
+    ? toSectionItems(articlesResult.value)
+    : [];
+  const videos = videosResult.status === "fulfilled"
+    ? toSectionItems(videosResult.value)
+    : [];
+
+  return pageConfig.sections.map((section) =>
+    buildAggregateSection(section, articles, videos),
+  );
+}
+
+async function loadPageSections(pageConfig) {
+  if (pageConfig.slug === "home") {
+    return loadHomeSections(pageConfig);
+  }
+
+  return Promise.all(
+    pageConfig.sections.map(async (section) => {
+      const payload = await loadSection(section);
+
+      return {
+        ...section,
+        items: toSectionItems(payload),
+        meta: toSectionMeta(payload),
+      };
+    }),
+  );
+}
+
 function NewsPage({ pageConfig }) {
   const location = useLocation();
   const showSidebar = Boolean(pageConfig.showSidebar);
-  const [sections, setSections] = useState([]);
+  const pageCacheKey = useMemo(() => getPageCacheKey(pageConfig), [pageConfig]);
+  const initialCachedPage = readCachedPage(pageCacheKey);
+  const [sections, setSections] = useState(() => initialCachedPage?.sections ?? []);
   const [allCategories, setAllCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initialCachedPage?.sections);
   const [error, setError] = useState("");
 
-  const searchQuery =
-    new URLSearchParams(location.search).get("search")?.trim() ?? "";
+  const searchQuery = useMemo(
+    () => new URLSearchParams(location.search).get("search")?.trim() ?? "",
+    [location.search],
+  );
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   useEffect(() => {
     let cancelled = false;
+    const cachedPage = readCachedPage(pageCacheKey);
+    const hasCachedSections = Array.isArray(cachedPage?.sections);
+
+    if (hasCachedSections) {
+      scheduleStateUpdate(() => {
+        if (!cancelled) {
+          setSections(cachedPage.sections);
+          setLoading(false);
+          setError("");
+        }
+      });
+
+      if (isCachedPageFresh(cachedPage)) {
+        return () => {
+          cancelled = true;
+        };
+      }
+    } else {
+      scheduleStateUpdate(() => {
+        if (!cancelled) {
+          setSections([]);
+          setLoading(true);
+          setError("");
+        }
+      });
+    }
 
     async function loadPage() {
-      setLoading(true);
-      setError("");
-
       try {
-        const resolvedSections = await Promise.all(
-          pageConfig.sections.map(async (section) => {
-            const payload = await loadSection(section);
-
-            return {
-              ...section,
-              items: toSectionItems(payload),
-              meta: toSectionMeta(payload),
-            };
-          }),
-        );
+        const resolvedSections = await loadPageSections(pageConfig);
 
         if (!cancelled) {
-          setSections(resolvedSections);
+          writeCachedPage(pageCacheKey, resolvedSections);
+
+          const commitSections = () => {
+            setSections(resolvedSections);
+            setError("");
+            setLoading(false);
+          };
+
+          if (hasCachedSections) {
+            startTransition(commitSections);
+          } else {
+            commitSections();
+          }
         }
-      } catch {
-        if (!cancelled) {
+      } catch (loadError) {
+        console.error("Failed to load page sections:", loadError);
+
+        if (!cancelled && !hasCachedSections) {
           setError("We could not load this page structure right now.");
-        }
-      } finally {
-        if (!cancelled) {
           setLoading(false);
         }
       }
@@ -191,11 +374,10 @@ function NewsPage({ pageConfig }) {
     return () => {
       cancelled = true;
     };
-  }, [pageConfig]);
+  }, [pageCacheKey, pageConfig]);
 
   useEffect(() => {
     if (!showSidebar) {
-      setAllCategories([]);
       return undefined;
     }
 
@@ -313,7 +495,7 @@ function NewsPage({ pageConfig }) {
               ) : null}
 
               {!loading && !error
-                ? visibleSections.map((section) => (
+                ? visibleSections.map((section, sectionIndex) => (
                     <ContentSection
                       key={section.key}
                       title={section.title}
@@ -322,6 +504,7 @@ function NewsPage({ pageConfig }) {
                       meta={section.meta}
                       type={section.type}
                       searchQuery={deferredSearchQuery}
+                      priorityImages={sectionIndex === 0 && !deferredSearchQuery}
                     />
                   ))
                 : null}

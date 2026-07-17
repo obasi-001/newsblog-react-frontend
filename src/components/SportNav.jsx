@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { getSportsSubcategories } from "../api/newsApi";
 import { buildSportsNavItems } from "../config/pageConfig";
@@ -50,4 +50,4 @@ function SportNav() {
   );
 }
 
-export default SportNav;
+export default memo(SportNav);

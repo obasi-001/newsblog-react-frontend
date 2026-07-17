@@ -58,19 +58,23 @@ function Footer() {
         </div>
 
         <div className="site-footer__contacts" aria-label="Contact links">
-          {contactLinks.map(({ label, href, Icon }) => (
-            <a
-              key={label}
-              href={href}
-              className="site-footer__contact"
-              aria-label={label}
-              title={label}
-              target={href.startsWith("http") ? "_blank" : undefined}
-              rel={href.startsWith("http") ? "noreferrer" : undefined}
-            >
-              <Icon aria-hidden="true" />
-            </a>
-          ))}
+          {contactLinks.map(({ label, href, Icon }) => {
+            const ContactIcon = Icon;
+
+            return (
+              <a
+                key={label}
+                href={href}
+                className="site-footer__contact"
+                aria-label={label}
+                title={label}
+                target={href.startsWith("http") ? "_blank" : undefined}
+                rel={href.startsWith("http") ? "noreferrer" : undefined}
+              >
+                <ContactIcon aria-hidden="true" />
+              </a>
+            );
+          })}
         </div>
       </div>
     </footer>

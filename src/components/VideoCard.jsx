@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { memo } from "react";
 import { formatPublishedDate } from "../utils/formatters";
 
-function VideoCard({ video }) {
+function VideoCard({ video, priority = false }) {
   const thumbnailUrl = video.thumbnail_url;
 
   return (
@@ -19,8 +19,11 @@ function VideoCard({ video }) {
             src={thumbnailUrl}
             className="video-card-media"
             alt={video.title}
-            loading="lazy"
+            width="640"
+            height="360"
+            loading={priority ? "eager" : "lazy"}
             decoding="async"
+            fetchPriority={priority ? "high" : "auto"}
           />
 
           <div

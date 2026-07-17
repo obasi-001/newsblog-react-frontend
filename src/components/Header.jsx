@@ -6,6 +6,15 @@ import myNewsLogo from "../assets/my-news-logo.jpeg";
 import { primaryNavItems } from "../config/pageConfig";
 import { useTheme } from "../useTheme";
 
+function scheduleStateUpdate(callback) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(callback);
+    return;
+  }
+
+  Promise.resolve().then(callback);
+}
+
 function Header({ searchTarget }) {
   const headerRef = useRef(null);
   const location = useLocation();
@@ -54,7 +63,17 @@ function Header({ searchTarget }) {
   }, []);
 
   useEffect(() => {
-    setIsMenuOpen(false);
+    let cancelled = false;
+
+    scheduleStateUpdate(() => {
+      if (!cancelled) {
+        setIsMenuOpen(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [location.pathname]);
 
   useEffect(() => {

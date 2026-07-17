@@ -67,6 +67,7 @@
 // export default Sidebar;
 
 import { NavLink } from "react-router-dom";
+import { memo } from "react";
 import { getCategoryPath } from "../config/pageConfig";
 
 const newsroomNotes = [
@@ -150,4 +151,4 @@ function Sidebar({ categories = [] }) {
   );
 }
 
-export default Sidebar;
+export default memo(Sidebar);

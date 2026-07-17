@@ -17,6 +17,96 @@ const SPORTS_CATEGORY_SLUGS = new Set([
   "sports", "general", "football", "basketball", "tennis", "boxing", "formula-1", "golf", "olympics"
 ]);
 
+const LIST_CACHE_TTL_MS = 2 * 60 * 1000;
+const DETAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+const COMMENTS_CACHE_TTL_MS = 30 * 1000;
+const CATEGORY_CACHE_TTL_MS = 30 * 60 * 1000;
+
+const memoryCache = new Map();
+const articleSummaryCache = new Map();
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .filter((key) => value[key] !== undefined && typeof value[key] !== "function")
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function getCacheKey(scope, params = {}) {
+  return `${scope}:${stableStringify(params)}`;
+}
+
+function hasCachedData(entry) {
+  return Boolean(entry) && Object.prototype.hasOwnProperty.call(entry, "data");
+}
+
+function readCachedData(key) {
+  const entry = memoryCache.get(key);
+  return hasCachedData(entry) ? entry.data : undefined;
+}
+
+function isFreshCacheEntry(entry, ttl) {
+  return hasCachedData(entry) && Date.now() - entry.updatedAt < ttl;
+}
+
+async function getCachedRequest(key, fetcher, { ttl = LIST_CACHE_TTL_MS, forceRefresh = false } = {}) {
+  const entry = memoryCache.get(key);
+
+  if (!forceRefresh && isFreshCacheEntry(entry, ttl)) {
+    return entry.data;
+  }
+
+  if (!forceRefresh && entry?.promise) {
+    return entry.promise;
+  }
+
+  const promise = Promise.resolve()
+    .then(fetcher)
+    .then((data) => {
+      memoryCache.set(key, {
+        data,
+        updatedAt: Date.now(),
+      });
+
+      return data;
+    })
+    .catch((error) => {
+      const currentEntry = memoryCache.get(key);
+
+      if (hasCachedData(currentEntry)) {
+        memoryCache.set(key, {
+          data: currentEntry.data,
+          updatedAt: currentEntry.updatedAt,
+        });
+      } else {
+        memoryCache.delete(key);
+      }
+
+      throw error;
+    });
+
+  memoryCache.set(key, {
+    data: entry?.data,
+    promise,
+    updatedAt: entry?.updatedAt ?? 0,
+  });
+
+  return promise;
+}
+
+function deleteCachedData(key) {
+  memoryCache.delete(key);
+}
+
 function slugify(value) {
   return String(value ?? "")
     .trim()
@@ -558,6 +648,14 @@ function takeLimitedItems(items, limit) {
   return (Number.isFinite(l) && l > 0) ? items.slice(0, l) : items;
 }
 
+function seedArticleSummaries(value) {
+  toItemsArray(value).forEach((article) => {
+    if (article?.id !== null && article?.id !== undefined) {
+      articleSummaryCache.set(String(article.id), article);
+    }
+  });
+}
+
 const DEFAULT_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 25;
 const MAX_PAGINATED_PAGES = 5;
@@ -645,10 +743,17 @@ function getExpandedVideoOptions(options = {}) {
 // ==================== API FUNCTIONS ====================
 export async function getArticles(options = {}) {
   const expandedOptions = getExpandedArticleOptions(options);
-  const payload = options.allPages
-    ? await fetchAllPaginatedPages(fetchArticles, expandedOptions)
-    : await fetchArticles(expandedOptions);
-  return normalizeListPayload(payload, normalizeArticle);
+  const cacheKey = getCacheKey("articles", expandedOptions);
+
+  return getCachedRequest(cacheKey, async () => {
+    const payload = options.allPages
+      ? await fetchAllPaginatedPages(fetchArticles, expandedOptions)
+      : await fetchArticles(expandedOptions);
+    const normalizedPayload = normalizeListPayload(payload, normalizeArticle);
+    seedArticleSummaries(normalizedPayload);
+
+    return normalizedPayload;
+  });
 }
 
 export async function getArticlesByCategory(categorySlug, options = {}) {
@@ -657,52 +762,74 @@ export async function getArticlesByCategory(categorySlug, options = {}) {
 
 export async function getLatestArticles(options = {}) {
   const expandedOptions = getExpandedArticleOptions(options);
-  const payload = options.allPages
-    ? await fetchAllPaginatedPages(fetchArticles, expandedOptions)
-    : await fetchArticles(expandedOptions);
-  let articles = toItemsArray(normalizeListPayload(payload, normalizeArticle));
+  const cacheKey = getCacheKey("latestArticles", expandedOptions);
 
-  if (options.categorySlug) {
-    const target = slugify(options.categorySlug);
-    articles = articles.filter(a => slugify(a.category?.slug) === target);
-  }
+  return getCachedRequest(cacheKey, async () => {
+    const payload = await getArticles(options);
+    let articles = toItemsArray(payload);
 
-  const sortedArticles = [...articles].sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-  return options.allPages ? sortedArticles : takeLimitedItems(sortedArticles, options.limit);
+    if (options.categorySlug) {
+      const target = slugify(options.categorySlug);
+      articles = articles.filter(a => slugify(a.category?.slug) === target);
+    }
+
+    const sortedArticles = [...articles].sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+    return options.allPages ? sortedArticles : takeLimitedItems(sortedArticles, options.limit);
+  });
 }
 
 export async function getTrendingArticles(options = {}) {
   const expandedOptions = getExpandedArticleOptions(options);
-  const payload = options.allPages
-    ? await fetchAllPaginatedPages(fetchArticles, expandedOptions)
-    : await fetchArticles(expandedOptions);
-  let articles = toItemsArray(normalizeListPayload(payload, normalizeArticle));
+  const cacheKey = getCacheKey("trendingArticles", expandedOptions);
 
-  if (options.categorySlug) {
-    const target = slugify(options.categorySlug);
-    articles = articles.filter(a => slugify(a.category?.slug) === target);
-  }
+  return getCachedRequest(cacheKey, async () => {
+    const payload = await getArticles(options);
+    let articles = toItemsArray(payload);
 
-  const sortedArticles = [...articles].sort((a, b) => (b.likes_count||0) - (a.likes_count||0));
-  return options.allPages ? sortedArticles : takeLimitedItems(sortedArticles, options.limit);
+    if (options.categorySlug) {
+      const target = slugify(options.categorySlug);
+      articles = articles.filter(a => slugify(a.category?.slug) === target);
+    }
+
+    const sortedArticles = [...articles].sort((a, b) => (b.likes_count||0) - (a.likes_count||0));
+    return options.allPages ? sortedArticles : takeLimitedItems(sortedArticles, options.limit);
+  });
 }
 
 export async function getCategories(options = {}) {
-  const payload = await fetchCategories(options);
-  return toItemsArray(normalizeListPayload(payload, normalizeCategoryRecord));
+  const cacheKey = getCacheKey("categories", options);
+
+  return getCachedRequest(
+    cacheKey,
+    async () => {
+      const payload = await fetchCategories(options);
+      return toItemsArray(normalizeListPayload(payload, normalizeCategoryRecord));
+    },
+    { ttl: CATEGORY_CACHE_TTL_MS },
+  );
 }
 
 export async function getSportsSubcategories() {
-  const payload = await fetchSportsSubcategories();
-  return toItemsArray(payload).map(normalizeSportsSubcategoryRecord).filter(Boolean);
+  return getCachedRequest(
+    getCacheKey("sportsSubcategories"),
+    async () => {
+      const payload = await fetchSportsSubcategories();
+      return toItemsArray(payload).map(normalizeSportsSubcategoryRecord).filter(Boolean);
+    },
+    { ttl: CATEGORY_CACHE_TTL_MS },
+  );
 }
 
 export async function getVideos(options = {}) {
   const expandedOptions = getExpandedVideoOptions(options);
-  const payload = options.allPages
-    ? await fetchAllPaginatedPages(fetchVideos, expandedOptions)
-    : await fetchVideos(expandedOptions);
-  return normalizeListPayload(payload, normalizeVideo);
+  const cacheKey = getCacheKey("videos", expandedOptions);
+
+  return getCachedRequest(cacheKey, async () => {
+    const payload = options.allPages
+      ? await fetchAllPaginatedPages(fetchVideos, expandedOptions)
+      : await fetchVideos(expandedOptions);
+    return normalizeListPayload(payload, normalizeVideo);
+  });
 }
 
 export async function getVideosByCategory(categorySlug, options = {}) {
@@ -710,23 +837,69 @@ export async function getVideosByCategory(categorySlug, options = {}) {
 }
 
 // Keep the rest of your functions unchanged (getArticleById, getVideoBySlug, etc.)
-export async function getArticleById(articleId) {
-  try {
-    const payload = await fetchArticleById(articleId);
-    return normalizeArticle(payload);
-  } catch (e) {
-    if (e?.response?.status === 404) return null;
-    throw e;
+export function getCachedArticleById(articleId) {
+  const normalizedArticleId = String(articleId ?? "");
+  const detail = readCachedData(getCacheKey("articleDetail", { articleId: normalizedArticleId }));
+
+  if (detail !== undefined) {
+    return detail;
   }
+
+  return articleSummaryCache.get(normalizedArticleId) ?? null;
+}
+
+export function preloadArticleById(articleId) {
+  if (!articleId) {
+    return Promise.resolve(null);
+  }
+
+  return getArticleById(articleId).catch(() => null);
+}
+
+export async function getArticleById(articleId, options = {}) {
+  const normalizedArticleId = String(articleId ?? "");
+  const cacheKey = getCacheKey("articleDetail", { articleId: normalizedArticleId });
+
+  return getCachedRequest(
+    cacheKey,
+    async () => {
+      try {
+        const payload = await fetchArticleById(articleId);
+        const article = normalizeArticle(payload);
+
+        if (article?.id !== null && article?.id !== undefined) {
+          articleSummaryCache.set(String(article.id), article);
+        }
+
+        return article;
+      } catch (e) {
+        if (e?.response?.status === 404) return null;
+        throw e;
+      }
+    },
+    {
+      forceRefresh: options.forceRefresh,
+      ttl: DETAIL_CACHE_TTL_MS,
+    },
+  );
 }
 
 export async function getArticleComments(articleId) {
-  const payload = await fetchArticleComments(articleId);
-  return normalizeCommentsCollection(payload);
+  const cacheKey = getCacheKey("articleComments", { articleId: String(articleId ?? "") });
+
+  return getCachedRequest(
+    cacheKey,
+    async () => {
+      const payload = await fetchArticleComments(articleId);
+      return normalizeCommentsCollection(payload);
+    },
+    { ttl: COMMENTS_CACHE_TTL_MS },
+  );
 }
 
 export async function postArticleComment(articleId, commentText, fallbackCounts = {}) {
   const payload = await createArticleComment(articleId, commentText);
+  deleteCachedData(getCacheKey("articleComments", { articleId: String(articleId ?? "") }));
   return normalizeEngagementAction(payload, fallbackCounts);
 }
 
@@ -741,13 +914,21 @@ export async function registerArticleShare(articleId, sharePayload = {}, fallbac
 }
 
 export async function getVideoBySlug(videoSlug) {
-  try {
-    const payload = await fetchVideoBySlug(videoSlug);
-    return normalizeVideo(payload);
-  } catch (e) {
-    if (e?.response?.status === 404) return null;
-    throw e;
-  }
+  const cacheKey = getCacheKey("videoDetail", { videoSlug: String(videoSlug ?? "") });
+
+  return getCachedRequest(
+    cacheKey,
+    async () => {
+      try {
+        const payload = await fetchVideoBySlug(videoSlug);
+        return normalizeVideo(payload);
+      } catch (e) {
+        if (e?.response?.status === 404) return null;
+        throw e;
+      }
+    },
+    { ttl: DETAIL_CACHE_TTL_MS },
+  );
 }
 
 export function resolveMediaUrl(path) {
@@ -755,72 +936,76 @@ export function resolveMediaUrl(path) {
 }
 
 export async function getGroupedVideos(options = {}) {
-  try {
-    const payload = await fetchGroupedVideos(options);
-    if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-      return Object.entries(payload).reduce((groups, [category, videos]) => {
-        const key = slugify(category) || "uncategorized";
-        const normalizedVideos = toItemsArray(videos)
-          .map(normalizeVideo)
-          .filter(Boolean)
-          .map((video) => ({
-            ...video,
-            category_name: video.category_name || toTitleCase(key),
-          }));
+  const cacheKey = getCacheKey("groupedVideos", options);
 
-        return {
-          ...groups,
-          [key]: normalizedVideos,
-        };
-      }, {});
-    }
-  } catch (error) {
-    if (![404, 405].includes(error?.response?.status)) {
-      throw error;
-    }
-  }
+  return getCachedRequest(cacheKey, async () => {
+    try {
+      const payload = await fetchGroupedVideos(options);
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        return Object.entries(payload).reduce((groups, [category, videos]) => {
+          const key = slugify(category) || "uncategorized";
+          const normalizedVideos = toItemsArray(videos)
+            .map(normalizeVideo)
+            .filter(Boolean)
+            .map((video) => ({
+              ...video,
+              category_name: video.category_name || toTitleCase(key),
+            }));
 
-  const payload = await getVideos(options);
-  const videos = toItemsArray(payload);
-  return videos.reduce((groups, video) => {
-    const categorySlug = slugify(
-      pickFirstString(
-        video.category?.slug,
+          return {
+            ...groups,
+            [key]: normalizedVideos,
+          };
+        }, {});
+      }
+    } catch (error) {
+      if (![404, 405].includes(error?.response?.status)) {
+        throw error;
+      }
+    }
+
+    const payload = await getVideos(options);
+    const videos = toItemsArray(payload);
+    return videos.reduce((groups, video) => {
+      const categorySlug = slugify(
+        pickFirstString(
+          video.category?.slug,
+          video.category_name,
+          video.category?.name,
+        )
+      );
+      const groupKey = SPORTS_CATEGORY_SLUGS.has(categorySlug) || categorySlug === "world"
+        ? "sports"
+        : categorySlug || "uncategorized";
+      const categoryName = pickFirstString(
         video.category_name,
         video.category?.name,
-      )
-    );
-    const groupKey = SPORTS_CATEGORY_SLUGS.has(categorySlug) || categorySlug === "world"
-      ? "sports"
-      : categorySlug || "uncategorized";
-    const categoryName = pickFirstString(
-      video.category_name,
-      video.category?.name,
-      toTitleCase(groupKey),
-      "Uncategorized"
-    );
-    const groupedVideo = {
-      ...video,
-      category_name: groupKey === "sports" ? "Sports" : categoryName,
-    };
-    const nextGroups = {
-      ...groups,
-      [groupKey]: [...(groups[groupKey] ?? []), groupedVideo],
-    };
+        toTitleCase(groupKey),
+        "Uncategorized"
+      );
+      const groupedVideo = {
+        ...video,
+        category_name: groupKey === "sports" ? "Sports" : categoryName,
+      };
+      const nextGroups = {
+        ...groups,
+        [groupKey]: [...(groups[groupKey] ?? []), groupedVideo],
+      };
 
-    if (groupKey !== "sports" || !video.sports_unit_slug) {
-      return nextGroups;
-    }
+      if (groupKey !== "sports" || !video.sports_unit_slug) {
+        return nextGroups;
+      }
 
-    return {
-      ...nextGroups,
-      [video.sports_unit_slug]: [
-        ...(nextGroups[video.sports_unit_slug] ?? []),
-        {
-          ...groupedVideo,
-          category_name: video.sports_unit_name || toTitleCase(video.sports_unit_slug),
-        },
-      ],
-    };
-  }, {});
+      return {
+        ...nextGroups,
+        [video.sports_unit_slug]: [
+          ...(nextGroups[video.sports_unit_slug] ?? []),
+          {
+            ...groupedVideo,
+            category_name: video.sports_unit_name || toTitleCase(video.sports_unit_slug),
+          },
+        ],
+      };
+    }, {});
+  });
 }

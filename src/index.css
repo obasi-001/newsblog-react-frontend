@@ -627,6 +627,16 @@ body[data-theme="dark"] .news-header__theme:focus {
   width: 100%;
 }
 
+.content-section {
+  content-visibility: auto;
+  contain-intrinsic-size: 520px;
+}
+
+.news-card,
+.video-card {
+  contain: layout paint;
+}
+
 .news-card-media-frame {
   background: #061126;
   overflow: hidden;
@@ -659,6 +669,7 @@ body[data-theme="dark"] .news-header__theme:focus {
 }
 
 .detail-media {
+  aspect-ratio: 16 / 9;
   max-height: 460px;
 }
 

@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import NewsCard from "./NewsCard";
 import VideoCard from "./VideoCard";
@@ -32,8 +32,9 @@ function ContentSection({
   items,
   type = "article",
   searchQuery = "",
+  priorityImages = false,
 }) {
-  const visibleItems = Array.isArray(items) ? items : [];
+  const visibleItems = useMemo(() => Array.isArray(items) ? items : [], [items]);
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const isPhoneSize = useMediaQuery("(max-width: 575.98px)");
   const itemsPerPage = isPhoneSize ? Math.max(visibleItems.length, 1) : 4;
@@ -42,33 +43,45 @@ function ContentSection({
     ? `${visibleItems.length} match${visibleItems.length === 1 ? "" : "es"} for "${trimmedSearchQuery}".`
     : description;
   const hasMultipleItems = visibleItems.length > itemsPerPage;
-  const safeActiveItemIndex = Math.min(activeItemIndex, visibleItems.length - 1);
+  const safeActiveItemIndex = visibleItems.length > 0
+    ? Math.min(activeItemIndex, visibleItems.length - 1)
+    : 0;
   const activePageStart =
     Math.floor(safeActiveItemIndex / itemsPerPage) * itemsPerPage;
   const activePageEnd = activePageStart + itemsPerPage;
   const lastPageStart =
     Math.max(Math.ceil(visibleItems.length / itemsPerPage) - 1, 0) * itemsPerPage;
+  const pageItems = useMemo(
+    () => visibleItems.slice(activePageStart, activePageEnd),
+    [activePageEnd, activePageStart, visibleItems],
+  );
 
-  function showPreviousItem() {
+  const showPreviousItem = useCallback(() => {
     setActiveItemIndex((currentIndex) => {
+      const safeCurrentIndex = visibleItems.length > 0
+        ? Math.min(currentIndex, visibleItems.length - 1)
+        : 0;
       const currentPageStart =
-        Math.floor(currentIndex / itemsPerPage) * itemsPerPage;
+        Math.floor(safeCurrentIndex / itemsPerPage) * itemsPerPage;
 
       return currentPageStart === 0
         ? lastPageStart
         : Math.max(currentPageStart - itemsPerPage, 0);
     });
-  }
+  }, [itemsPerPage, lastPageStart, visibleItems.length]);
 
-  function showNextItem() {
+  const showNextItem = useCallback(() => {
     setActiveItemIndex((currentIndex) => {
+      const safeCurrentIndex = visibleItems.length > 0
+        ? Math.min(currentIndex, visibleItems.length - 1)
+        : 0;
       const currentPageStart =
-        Math.floor(currentIndex / itemsPerPage) * itemsPerPage;
+        Math.floor(safeCurrentIndex / itemsPerPage) * itemsPerPage;
       const nextPageStart = currentPageStart + itemsPerPage;
 
       return nextPageStart >= visibleItems.length ? 0 : nextPageStart;
     });
-  }
+  }, [itemsPerPage, visibleItems.length]);
 
   if (visibleItems.length === 0) {
     return null;
@@ -87,20 +100,28 @@ function ContentSection({
       </div>
 
       <div className="content-section__grid row g-4">
-        {visibleItems.map((item, itemIndex) => (
-          <div
-            key={type === "video" ? item.slug : item.id}
-            className={`content-section__item col-md-6 ${
-              itemIndex >= activePageStart && itemIndex < activePageEnd ? "is-active" : ""
-            }`.trim()}
-          >
-            {type === "video" ? (
-              <VideoCard video={item} />
-            ) : (
-              <NewsCard article={item} />
-            )}
-          </div>
-        ))}
+        {pageItems.map((item, pageItemIndex) => {
+          const itemIndex = activePageStart + pageItemIndex;
+
+          return (
+            <div
+              key={type === "video" ? item.slug : item.id}
+              className="content-section__item col-md-6 is-active"
+            >
+              {type === "video" ? (
+                <VideoCard
+                  video={item}
+                  priority={priorityImages && itemIndex < 2}
+                />
+              ) : (
+                <NewsCard
+                  article={item}
+                  priority={priorityImages && itemIndex < 2}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {hasMultipleItems ? (
@@ -127,4 +148,4 @@ function ContentSection({
   );
 }
 
-export default ContentSection;
+export default memo(ContentSection);

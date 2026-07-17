@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import EngagementBar from "../components/EngagementBar";
 import Header from "../components/Header";
@@ -6,6 +6,7 @@ import Footer from "../components/Footer";
 import Loader from "../components/Loader";
 import { hasStoredAuthToken } from "../auth";
 import {
+  getCachedArticleById,
   getArticleById,
   getArticleComments,
   postArticleComment,
@@ -160,7 +161,7 @@ function buildArticleContentBlocks(paragraphs, detailImages) {
   });
 }
 
-function DetailImageFigure({ articleTitle, detailImage, imageIndex }) {
+const DetailImageFigure = memo(function DetailImageFigure({ articleTitle, detailImage, imageIndex }) {
   const imageUrl = resolveMediaUrl(detailImage.image);
   const placeholderImage = "/images/news-placeholder.jpg";
   const [failedImageUrl, setFailedImageUrl] = useState("");
@@ -194,35 +195,60 @@ function DetailImageFigure({ articleTitle, detailImage, imageIndex }) {
       </figure>
     </div>
   );
+});
+
+function getInitialArticle(articleId, locationState) {
+  const articlePreview = locationState?.articlePreview;
+
+  if (articlePreview && String(articlePreview.id) === String(articleId)) {
+    return articlePreview;
+  }
+
+  return getCachedArticleById(articleId);
 }
 
 function ArticleDetail() {
   const { articleId } = useParams();
   const location = useLocation();
   const commentInputRef = useRef(null);
-  const [article, setArticle] = useState(null);
-  const [comments, setComments] = useState([]);
+  const initialArticle = useMemo(
+    () => getInitialArticle(articleId, location.state),
+    [articleId, location.state],
+  );
+  const [article, setArticle] = useState(initialArticle);
+  const [comments, setComments] = useState(() => initialArticle?.comments ?? []);
   const [commentDraft, setCommentDraft] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initialArticle);
   const [loadError, setLoadError] = useState("");
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [failedArticleImageUrl, setFailedArticleImageUrl] = useState("");
   const isAuthenticated = hasStoredAuthToken();
 
   useEffect(() => {
     let cancelled = false;
+    const cachedArticle = getInitialArticle(articleId, location.state);
 
     async function loadArticle() {
-      setLoading(true);
       setLoadError("");
-      setComments([]);
       setCommentsError("");
       setCommentDraft("");
       setSubmitError("");
       setSubmitSuccess("");
+      setFailedArticleImageUrl("");
+
+      if (cachedArticle) {
+        setArticle(cachedArticle);
+        setComments(cachedArticle.comments ?? []);
+        setLoading(false);
+      } else {
+        setArticle(null);
+        setComments([]);
+        setLoading(true);
+      }
 
       try {
         const result = await getArticleById(articleId);
@@ -275,11 +301,14 @@ function ArticleDetail() {
         }
       } catch (error) {
         if (!cancelled) {
-          setArticle(null);
-          setComments([]);
-          setLoadError(
-            getApiErrorMessage(error, "We could not load this article right now."),
-          );
+          if (!cachedArticle) {
+            setArticle(null);
+            setComments([]);
+            setLoadError(
+              getApiErrorMessage(error, "We could not load this article right now."),
+            );
+          }
+
           setLoading(false);
           setCommentsLoading(false);
         }
@@ -291,7 +320,16 @@ function ArticleDetail() {
     return () => {
       cancelled = true;
     };
-  }, [articleId]);
+  }, [articleId, location.state]);
+
+  const focusCommentComposer = useCallback(() => {
+    const commentsSection = document.getElementById("comments");
+    commentsSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    window.setTimeout(() => {
+      commentInputRef.current?.focus();
+    }, 180);
+  }, []);
 
   useEffect(() => {
     if (location.hash !== "#comments" || !article) {
@@ -299,16 +337,7 @@ function ArticleDetail() {
     }
 
     focusCommentComposer();
-  }, [article, location.hash]);
-
-  function focusCommentComposer() {
-    const commentsSection = document.getElementById("comments");
-    commentsSection?.scrollIntoView({ behavior: "smooth", block: "start" });
-
-    window.setTimeout(() => {
-      commentInputRef.current?.focus();
-    }, 180);
-  }
+  }, [article, focusCommentComposer, location.hash]);
 
   async function handleCommentSubmit(event) {
     event.preventDefault();
@@ -372,14 +401,21 @@ function ArticleDetail() {
     }
   }
 
-  const displayedCommentsCount = Math.max(
-    article?.comments_count ?? 0,
-    comments.length,
+  const displayedCommentsCount = useMemo(
+    () => Math.max(article?.comments_count ?? 0, comments.length),
+    [article?.comments_count, comments.length],
   );
-  const detailImages = article?.detail_images ?? [];
-  const articleContentBlocks = buildArticleContentBlocks(
-    article?.body ?? [],
-    detailImages,
+  const detailImages = useMemo(
+    () => article?.detail_images ?? [],
+    [article?.detail_images],
+  );
+  const articleBody = useMemo(
+    () => article?.body ?? [],
+    [article?.body],
+  );
+  const articleContentBlocks = useMemo(
+    () => buildArticleContentBlocks(articleBody, detailImages),
+    [articleBody, detailImages],
   );
   const articleAuthor = String(article?.author ?? "").trim();
   const articleSource = String(article?.source ?? "").trim();
@@ -388,14 +424,21 @@ function ArticleDetail() {
     && (!articleSource || articleAuthor.toLowerCase() !== articleSource.toLowerCase()),
   );
   const hasByline = Boolean(articleAuthor || articleSource);
-  const articleImageUrl = resolveMediaUrl(article?.image);
+  const articleImageUrl = useMemo(
+    () => resolveMediaUrl(article?.image),
+    [article?.image],
+  );
   const placeholderImage = "/images/news-placeholder.jpg";
-  const [failedArticleImageUrl, setFailedArticleImageUrl] = useState("");
   const articleImageFailed = Boolean(
     articleImageUrl && failedArticleImageUrl === articleImageUrl,
   );
   const displayedArticleImageUrl =
     articleImageUrl && !articleImageFailed ? articleImageUrl : placeholderImage;
+  const handleArticleImageError = useCallback(() => {
+    if (articleImageUrl && !articleImageFailed) {
+      setFailedArticleImageUrl(articleImageUrl);
+    }
+  }, [articleImageFailed, articleImageUrl]);
 
   return (
     <>
@@ -422,11 +465,12 @@ function ArticleDetail() {
               src={displayedArticleImageUrl}
               alt={article.image_alt || article.title}
               className="detail-media w-100"
-              onError={() => {
-                if (articleImageUrl && !articleImageFailed) {
-                  setFailedArticleImageUrl(articleImageUrl);
-                }
-              }}
+              width="1280"
+              height="720"
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
+              onError={handleArticleImageError}
             />
 
             <div className="p-4 p-lg-5">

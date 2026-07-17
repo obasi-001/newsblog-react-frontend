@@ -1,13 +1,14 @@
 import { Link } from "react-router-dom";
-import { memo, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import EngagementBar from "./EngagementBar";
-import { resolveMediaUrl } from "../api/newsApi";
+import { preloadArticleById, resolveMediaUrl } from "../api/newsApi";
 import { getCategoryPath } from "../config/pageConfig";
 import { formatPublishedDate } from "../utils/formatters";
 
-function NewsCard({ article }) {
+function NewsCard({ article, priority = false }) {
   const imageUrl = resolveMediaUrl(article.image);
   const placeholderImage = "/images/news-placeholder.jpg";
+  const articlePath = `/articles/${article.id}`;
   const [failedImageUrl, setFailedImageUrl] = useState("");
   const imageFailed = Boolean(imageUrl && failedImageUrl === imageUrl);
   const usesPlaceholderImage = !imageUrl || imageFailed;
@@ -20,17 +21,23 @@ function NewsCard({ article }) {
   );
   const hasByline = Boolean(articleAuthor || articleSource);
 
-  const handleImageError = () => {
+  const handleImageError = useCallback(() => {
     if (imageUrl && !imageFailed) {
       setFailedImageUrl(imageUrl);
     }
-  };
+  }, [imageFailed, imageUrl]);
+
+  const handleArticleIntent = useCallback(() => {
+    preloadArticleById(article.id);
+  }, [article.id]);
 
   return (
     <article
       className={`news-card ${
         imageUrl ? "news-card--has-image" : "news-card--no-image"
       } card border-0 shadow-sm h-100 overflow-hidden`}
+      onFocusCapture={handleArticleIntent}
+      onMouseEnter={handleArticleIntent}
     >
       <div
         className={`news-card-media-frame${
@@ -48,8 +55,11 @@ function NewsCard({ article }) {
             usesPlaceholderImage ? " news-card-media--placeholder" : ""
           }`}
           alt={article.image_alt || article.title}
-          loading="lazy"
+          width="640"
+          height="400"
+          loading={priority ? "eager" : "lazy"}
           decoding="async"
+          fetchPriority={priority ? "high" : "auto"}
           onError={handleImageError}
         />
       </div>
@@ -69,8 +79,10 @@ function NewsCard({ article }) {
         </div>
 
         <Link
-          to={`/articles/${article.id}`}
+          to={articlePath}
+          state={{ articlePreview: article }}
           className="text-dark text-decoration-none stretched-link"
+          onPointerDown={handleArticleIntent}
         >
           <h3 className="news-card__title h5 fw-semibold">
             {article.title}
@@ -107,7 +119,7 @@ function NewsCard({ article }) {
             <EngagementBar
               articleId={article.id}
               articleTitle={article.title}
-              articlePath={`/articles/${article.id}`}
+              articlePath={articlePath}
               likesCount={article.likes_count}
               commentsCount={article.comments_count}
               sharesCount={article.shares_count}

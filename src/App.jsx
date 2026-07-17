@@ -20,10 +20,13 @@ import ResetPasswordConfirm from "./pages/ResetPasswordConfirm";
 import Logout from "./pages/Logout";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import SiteControls from "./components/SiteControls";
+import ScrollRestoration from "./components/ScrollRestoration";
 
 function App() {
   return (
     <>
+      <ScrollRestoration />
+
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sports" element={<Sports />} />
