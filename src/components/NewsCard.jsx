@@ -1,15 +1,17 @@
 import { Link } from "react-router-dom";
-import { memo } from "react";
+import { memo, useState } from "react";
 import EngagementBar from "./EngagementBar";
 import { resolveMediaUrl } from "../api/newsApi";
 import { getCategoryPath } from "../config/pageConfig";
 import { formatPublishedDate } from "../utils/formatters";
-import { getRetriedMediaUrl } from "../utils/media";
 
 function NewsCard({ article }) {
   const imageUrl = resolveMediaUrl(article.image);
   const placeholderImage = "/images/news-placeholder.jpg";
-  const usesPlaceholderImage = !imageUrl;
+  const [failedImageUrl, setFailedImageUrl] = useState("");
+  const imageFailed = Boolean(imageUrl && failedImageUrl === imageUrl);
+  const usesPlaceholderImage = !imageUrl || imageFailed;
+  const cardImageUrl = usesPlaceholderImage ? placeholderImage : imageUrl;
   const articleAuthor = String(article.author ?? "").trim();
   const articleSource = String(article.source ?? "").trim();
   const hasDistinctAuthor = Boolean(
@@ -18,24 +20,9 @@ function NewsCard({ article }) {
   );
   const hasByline = Boolean(articleAuthor || articleSource);
 
-  const handleImageError = (e) => {
-    const originalSrc = e.currentTarget.dataset.originalSrc;
-    const hasRetried = e.currentTarget.dataset.hasRetried === "true";
-
-    if (originalSrc && !hasRetried) {
-      e.currentTarget.dataset.hasRetried = "true";
-      e.currentTarget.src = getRetriedMediaUrl(originalSrc);
-      return;
-    }
-
-    e.target.onerror = null;
-    e.target.src = placeholderImage;
-    e.target.classList.add("news-card-media--placeholder");
-
-    const mediaFrame = e.target.closest(".news-card-media-frame");
-    if (mediaFrame) {
-      mediaFrame.classList.add("news-card-media-frame--placeholder");
-      mediaFrame.style.backgroundImage = `url("${placeholderImage}")`;
+  const handleImageError = () => {
+    if (imageUrl && !imageFailed) {
+      setFailedImageUrl(imageUrl);
     }
   };
 
@@ -56,15 +43,13 @@ function NewsCard({ article }) {
         }
       >
         <img
-          key={imageUrl || placeholderImage}
-          src={imageUrl || placeholderImage}
+          src={cardImageUrl}
           className={`news-card-media${
             usesPlaceholderImage ? " news-card-media--placeholder" : ""
           }`}
           alt={article.image_alt || article.title}
           loading="lazy"
           decoding="async"
-          data-original-src={imageUrl}
           onError={handleImageError}
         />
       </div>

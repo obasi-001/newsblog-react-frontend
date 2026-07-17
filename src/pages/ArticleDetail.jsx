@@ -14,7 +14,6 @@ import {
 import { getCategoryPath } from "../config/pageConfig";
 import { getApiErrorMessage } from "../utils/apiErrors";
 import { formatDateTime, formatPublishedDate } from "../utils/formatters";
-import { getRetriedMediaUrl } from "../utils/media";
 
 const IMAGE_SHORTCODE_PATTERN = /\[(?:IMAGE|DETAIL_IMAGE|DETAILS_IMAGE)(?:\s*:\s*(\d+))?\]/gi;
 
@@ -164,17 +163,15 @@ function buildArticleContentBlocks(paragraphs, detailImages) {
 function DetailImageFigure({ articleTitle, detailImage, imageIndex }) {
   const imageUrl = resolveMediaUrl(detailImage.image);
   const placeholderImage = "/images/news-placeholder.jpg";
-
-  const handleImageError = (event) => {
-    event.target.onerror = null;
-    event.target.src = placeholderImage;
-  };
+  const [failedImageUrl, setFailedImageUrl] = useState("");
+  const imageFailed = Boolean(imageUrl && failedImageUrl === imageUrl);
+  const displayImageUrl = imageUrl && !imageFailed ? imageUrl : placeholderImage;
 
   return (
     <div className="detail-image-gallery">
       <figure className="detail-image-gallery__item">
         <img
-          src={imageUrl || placeholderImage}
+          src={displayImageUrl}
           alt={
             detailImage.image_alt
             || detailImage.caption
@@ -183,7 +180,11 @@ function DetailImageFigure({ articleTitle, detailImage, imageIndex }) {
           className="detail-image-gallery__image"
           loading="lazy"
           decoding="async"
-          onError={handleImageError}
+          onError={() => {
+            if (imageUrl && !imageFailed) {
+              setFailedImageUrl(imageUrl);
+            }
+          }}
         />
         {detailImage.caption ? (
           <figcaption className="detail-image-gallery__caption">
@@ -389,20 +390,12 @@ function ArticleDetail() {
   const hasByline = Boolean(articleAuthor || articleSource);
   const articleImageUrl = resolveMediaUrl(article?.image);
   const placeholderImage = "/images/news-placeholder.jpg";
-
-  const handleArticleImageError = (event) => {
-    const originalSrc = event.currentTarget.dataset.originalSrc;
-    const hasRetried = event.currentTarget.dataset.hasRetried === "true";
-
-    if (originalSrc && !hasRetried) {
-      event.currentTarget.dataset.hasRetried = "true";
-      event.currentTarget.src = getRetriedMediaUrl(originalSrc);
-      return;
-    }
-
-    event.target.onerror = null;
-    event.target.src = placeholderImage;
-  };
+  const [failedArticleImageUrl, setFailedArticleImageUrl] = useState("");
+  const articleImageFailed = Boolean(
+    articleImageUrl && failedArticleImageUrl === articleImageUrl,
+  );
+  const displayedArticleImageUrl =
+    articleImageUrl && !articleImageFailed ? articleImageUrl : placeholderImage;
 
   return (
     <>
@@ -426,12 +419,14 @@ function ArticleDetail() {
         {!loading && article ? (
           <article className="bg-white border rounded-4 shadow-sm overflow-hidden">
             <img
-              key={articleImageUrl || placeholderImage}
-              src={articleImageUrl || placeholderImage}
+              src={displayedArticleImageUrl}
               alt={article.image_alt || article.title}
               className="detail-media w-100"
-              data-original-src={articleImageUrl}
-              onError={handleArticleImageError}
+              onError={() => {
+                if (articleImageUrl && !articleImageFailed) {
+                  setFailedArticleImageUrl(articleImageUrl);
+                }
+              }}
             />
 
             <div className="p-4 p-lg-5">
