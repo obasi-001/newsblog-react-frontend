@@ -161,11 +161,19 @@ function buildArticleContentBlocks(paragraphs, detailImages) {
 }
 
 function DetailImageFigure({ articleTitle, detailImage, imageIndex }) {
+  const imageUrl = resolveMediaUrl(detailImage.image);
+  const placeholderImage = "/images/news-placeholder.jpg";
+
+  const handleImageError = (event) => {
+    event.target.onerror = null;
+    event.target.src = placeholderImage;
+  };
+
   return (
     <div className="detail-image-gallery">
       <figure className="detail-image-gallery__item">
         <img
-          src={resolveMediaUrl(detailImage.image)}
+          src={imageUrl || placeholderImage}
           alt={
             detailImage.image_alt
             || detailImage.caption
@@ -174,6 +182,7 @@ function DetailImageFigure({ articleTitle, detailImage, imageIndex }) {
           className="detail-image-gallery__image"
           loading="lazy"
           decoding="async"
+          onError={handleImageError}
         />
         {detailImage.caption ? (
           <figcaption className="detail-image-gallery__caption">
@@ -377,6 +386,13 @@ function ArticleDetail() {
     && (!articleSource || articleAuthor.toLowerCase() !== articleSource.toLowerCase()),
   );
   const hasByline = Boolean(articleAuthor || articleSource);
+  const articleImageUrl = resolveMediaUrl(article?.image);
+  const placeholderImage = "/images/news-placeholder.jpg";
+
+  const handleArticleImageError = (event) => {
+    event.target.onerror = null;
+    event.target.src = placeholderImage;
+  };
 
   return (
     <>
@@ -400,9 +416,10 @@ function ArticleDetail() {
         {!loading && article ? (
           <article className="bg-white border rounded-4 shadow-sm overflow-hidden">
             <img
-              src={resolveMediaUrl(article.image)}
+              src={articleImageUrl || placeholderImage}
               alt={article.image_alt || article.title}
               className="detail-media w-100"
+              onError={handleArticleImageError}
             />
 
             <div className="p-4 p-lg-5">
