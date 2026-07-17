@@ -33,6 +33,7 @@ function ContentSection({
   type = "article",
   searchQuery = "",
   priorityImages = false,
+  scrollAnchorScope = "feed",
 }) {
   const visibleItems = useMemo(() => Array.isArray(items) ? items : [], [items]);
   const [activeItemIndex, setActiveItemIndex] = useState(0);
@@ -114,11 +115,13 @@ function ContentSection({
                   priority={priorityImages && itemIndex < 2}
                 />
               ) : (
-                <NewsCard
-                  article={item}
-                  priority={priorityImages && itemIndex < 2}
-                />
-              )}
+              <NewsCard
+                article={item}
+                itemIndex={itemIndex}
+                priority={priorityImages && itemIndex < 2}
+                scrollAnchorScope={scrollAnchorScope}
+              />
+            )}
             </div>
           );
         })}

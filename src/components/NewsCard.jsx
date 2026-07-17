@@ -6,12 +6,17 @@ import { getCategoryPath } from "../config/pageConfig";
 import { rememberCurrentScrollAnchor } from "../utils/scrollMemory";
 import { formatPublishedDate } from "../utils/formatters";
 
-function NewsCard({ article, priority = false }) {
+function NewsCard({
+  article,
+  itemIndex = 0,
+  priority = false,
+  scrollAnchorScope = "feed",
+}) {
   const location = useLocation();
   const imageUrl = resolveMediaUrl(article.image);
   const placeholderImage = "/images/news-placeholder.jpg";
   const articlePath = `/articles/${article.id}`;
-  const scrollAnchor = `article-${article.id}`;
+  const scrollAnchor = `${scrollAnchorScope}:article:${article.id}:item:${itemIndex}`;
   const [failedImageUrl, setFailedImageUrl] = useState("");
   const imageFailed = Boolean(imageUrl && failedImageUrl === imageUrl);
   const usesPlaceholderImage = !imageUrl || imageFailed;

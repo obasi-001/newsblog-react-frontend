@@ -505,6 +505,7 @@ function NewsPage({ pageConfig }) {
                       type={section.type}
                       searchQuery={deferredSearchQuery}
                       priorityImages={sectionIndex === 0 && !deferredSearchQuery}
+                      scrollAnchorScope={section.key}
                     />
                   ))
                 : null}
