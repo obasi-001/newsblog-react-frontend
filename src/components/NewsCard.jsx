@@ -4,6 +4,7 @@ import EngagementBar from "./EngagementBar";
 import { resolveMediaUrl } from "../api/newsApi";
 import { getCategoryPath } from "../config/pageConfig";
 import { formatPublishedDate } from "../utils/formatters";
+import { getRetriedMediaUrl } from "../utils/media";
 
 function NewsCard({ article }) {
   const imageUrl = resolveMediaUrl(article.image);
@@ -18,6 +19,15 @@ function NewsCard({ article }) {
   const hasByline = Boolean(articleAuthor || articleSource);
 
   const handleImageError = (e) => {
+    const originalSrc = e.currentTarget.dataset.originalSrc;
+    const hasRetried = e.currentTarget.dataset.hasRetried === "true";
+
+    if (originalSrc && !hasRetried) {
+      e.currentTarget.dataset.hasRetried = "true";
+      e.currentTarget.src = getRetriedMediaUrl(originalSrc);
+      return;
+    }
+
     e.target.onerror = null;
     e.target.src = placeholderImage;
     e.target.classList.add("news-card-media--placeholder");
@@ -46,6 +56,7 @@ function NewsCard({ article }) {
         }
       >
         <img
+          key={imageUrl || placeholderImage}
           src={imageUrl || placeholderImage}
           className={`news-card-media${
             usesPlaceholderImage ? " news-card-media--placeholder" : ""
@@ -53,6 +64,7 @@ function NewsCard({ article }) {
           alt={article.image_alt || article.title}
           loading="lazy"
           decoding="async"
+          data-original-src={imageUrl}
           onError={handleImageError}
         />
       </div>

@@ -14,6 +14,7 @@ import {
 import { getCategoryPath } from "../config/pageConfig";
 import { getApiErrorMessage } from "../utils/apiErrors";
 import { formatDateTime, formatPublishedDate } from "../utils/formatters";
+import { getRetriedMediaUrl } from "../utils/media";
 
 const IMAGE_SHORTCODE_PATTERN = /\[(?:IMAGE|DETAIL_IMAGE|DETAILS_IMAGE)(?:\s*:\s*(\d+))?\]/gi;
 
@@ -390,6 +391,15 @@ function ArticleDetail() {
   const placeholderImage = "/images/news-placeholder.jpg";
 
   const handleArticleImageError = (event) => {
+    const originalSrc = event.currentTarget.dataset.originalSrc;
+    const hasRetried = event.currentTarget.dataset.hasRetried === "true";
+
+    if (originalSrc && !hasRetried) {
+      event.currentTarget.dataset.hasRetried = "true";
+      event.currentTarget.src = getRetriedMediaUrl(originalSrc);
+      return;
+    }
+
     event.target.onerror = null;
     event.target.src = placeholderImage;
   };
@@ -416,9 +426,12 @@ function ArticleDetail() {
         {!loading && article ? (
           <article className="bg-white border rounded-4 shadow-sm overflow-hidden">
             <img
+              key={articleImageUrl || placeholderImage}
               src={articleImageUrl || placeholderImage}
               alt={article.image_alt || article.title}
               className="detail-media w-100"
+              data-original-src={articleImageUrl}
+              onError={handleArticleImageError}
             />
 
             <div className="p-4 p-lg-5">
