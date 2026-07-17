@@ -419,7 +419,6 @@ function ArticleDetail() {
               src={articleImageUrl || placeholderImage}
               alt={article.image_alt || article.title}
               className="detail-media w-100"
-              onError={handleArticleImageError}
             />
 
             <div className="p-4 p-lg-5">
